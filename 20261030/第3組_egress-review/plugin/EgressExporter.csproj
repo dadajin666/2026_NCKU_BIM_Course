@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RevitVersion Condition="'$(RevitVersion)' == ''">2027</RevitVersion>
+    <TargetFramework Condition="'$(RevitVersion)' == '2027'">net10.0-windows</TargetFramework>
+    <TargetFramework Condition="'$(RevitVersion)' == '2024'">net48</TargetFramework>
+    <RevitDirectory Condition="'$(RevitDirectory)' == ''">C:\Program Files\Autodesk\Revit $(RevitVersion)</RevitDirectory>
+    <UseWindowsForms>true</UseWindowsForms>
+    <UseWPF>true</UseWPF>
+    <OutputType>Library</OutputType>
+    <AssemblyName>Group3.EgressExporter</AssemblyName>
+    <PlatformTarget>x64</PlatformTarget>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <OutputPath>bin/$(RevitVersion)/$(Configuration)/</OutputPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="src/*.cs" />
+    <Reference Include="RevitAPI"><HintPath>$(RevitDirectory)/RevitAPI.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="RevitAPIUI"><HintPath>$(RevitDirectory)/RevitAPIUI.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="System.Runtime.Serialization" Condition="'$(RevitVersion)' == '2024'" />
+  </ItemGroup>
+  <Target Name="ValidateRevit" BeforeTargets="ResolveReferences">
+    <Error Condition="'$(RevitVersion)' != '2027' and '$(RevitVersion)' != '2024'" Text="Supported RevitVersion: 2027 or 2024." />
+    <Error Condition="!Exists('$(RevitDirectory)/RevitAPI.dll')" Text="Install Revit $(RevitVersion) or set RevitDirectory to its API assembly directory." />
+  </Target>
+</Project>
