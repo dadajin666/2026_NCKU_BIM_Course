@@ -114,7 +114,9 @@ namespace Group3.EgressExporter
             foreach (var level in new FilteredElementCollector(doc).OfClass(typeof(Level)).Cast<Level>().OrderBy(l => l.ProjectElevation)) levels.Items.Add(level);
             foreach (Phase phase in doc.Phases) phases.Items.Add(phase);
             if (levels.Items.Count > 0) levels.SelectedIndex = 0;
-            if (doc.ActiveView.GenLevel != null) levels.SelectedItem = doc.ActiveView.GenLevel;
+            var viewLevelId = doc.ActiveView.GenLevel?.Id;
+            foreach (Level candidate in levels.Items)
+                if (candidate.Id == viewLevelId) { levels.SelectedItem = candidate; break; }
             if (phases.Items.Count > 0) phases.SelectedIndex = phases.Items.Count - 1;
             var activePhase = doc.ActiveView.get_Parameter(BuiltInParameter.VIEW_PHASE)?.AsElementId();
             foreach (Phase phase in phases.Items) if (phase.Id == activePhase) phases.SelectedItem = phase;

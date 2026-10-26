@@ -21,7 +21,9 @@ namespace Group3.EgressExporter
         void Warn(Element e, string code, string message, string severity = "warning") =>
             result.warnings.Add(new WarningData { element_id = e == null ? null : Id(e), code = code, message = message, severity = severity });
         IEnumerable<T> All<T>() where T : Element => new FilteredElementCollector(doc)
-            .OfClass(typeof(T)).WhereElementIsNotElementType().Cast<T>().OrderBy(e => e.Id.Value);
+            // Room is an API-only subclass; Revit's native class filter accepts SpatialElement.
+            .OfClass(typeof(T) == typeof(Room) ? typeof(SpatialElement) : typeof(T))
+            .WhereElementIsNotElementType().OfType<T>().OrderBy(e => e.Id.Value);
         bool MainModel(Element e) => e.DesignOption == null;
         bool Exists(Element e)
         {
