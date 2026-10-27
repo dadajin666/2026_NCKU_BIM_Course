@@ -123,6 +123,8 @@ node check.js
 
 2026-10-27 更新：修正版已重新安裝；核心測試 10 項及專案 check.js 通過。使用者指定改用背景方式測試。MCP 現已成功讀到 project1-validation 與 FL1，但全模型 Rooms／Doors／Stairs 查詢皆為 0，尚無對應元件可驗證外掛匯出。詳細結果見 [背景驗證紀錄](validation/2026-10-27.md)。
 
+同日後續：使用者另開 `NCKU_9hours_intro_course` 並授權操作匯出視窗，已成功匯出 Level 1／New Construction 快照。3 間房的邊界與面積、1 座樓梯的分件幾何及缺漏輸出已核對；18 項快照檢查通過。門座標仍僅輸出 1 扇，2 扇帷幕牆門列缺漏；房門關聯、走廊與樓梯終點尚待補齊，因此完整驗收仍為部分通過。見 [NCKU 實測紀錄](validation/2026-10-27-NCKU.md)。
+
 ## 程式位置
 
 - `src/App.cs`：功能區按鈕、匯出與缺漏介面、所選元件識別碼。
