@@ -8,9 +8,10 @@
 
   // §93 第 2 款：依使用類組與條件決定步行距離上限，並記錄套用了哪些規則
   function walkLimit(settings) {
+    settings = settings || {};
     const g = settings.use_group;
     if (!g) return { limit: null, rules: [], pending: ["尚未選擇使用類組"] };
-    const rules = [], pending = [];
+    const rules = ["R93-2-END"], pending = [];
     let limit;
     if (GROUP_30.includes(g)) { limit = 30; rules.push("R93-2-1A"); }
     else if (GROUP_C.includes(g)) {
@@ -32,6 +33,7 @@
 
   // §92 第 1 款：走廊淨寬需求
   function corridorRequirement(settings, habitableArea, twoSided) {
+    settings = settings || {};
     const g = settings.use_group;
     if (!g) return { required: null, rule: null, pending: ["尚未選擇使用類組"] };
     if (GROUP_CLASSROOM.includes(g)) {
@@ -45,28 +47,42 @@
 
   // 判定順序：資料不足 → 需人工確認 → 符合／不符合；設計提示另外列，不影響 status
   function judgeRoom(room, facts, lim, P, corridors) {
+    room = room || {};
+    facts = facts || {};
+    lim = lim || { limit: null, rules: [], pending: ["法規步行距離上限尚未計算"] };
+    P = P || {};
+    corridors = Array.isArray(corridors) ? corridors : [];
     // 判定用未四捨五入的距離（整合規則第 12 條）
     const d = facts.distance_exact_m != null ? facts.distance_exact_m : facts.distance_m;
     const res = { status: null, reasons: [], legal: null, hints: [] };
     if (facts.missing) { res.status = "模型資料不足"; res.reasons.push(facts.missing); return res; }
+    if (!Number.isFinite(d) || d < 0) { res.status = "模型資料不足"; res.reasons.push("缺少有效的步行距離計算結果"); return res; }
+    if (room.is_habitable === false) {
+      res.status = "需人工確認";
+      res.reasons.push("模型標示為非居室；請確認是否應排除 §93 居室檢討");
+      return res;
+    }
     if (room.is_habitable == null) res.reasons.push("是否為居室待確認（§93 只檢討居室）");
-    if (lim.pending.length) res.reasons.push(...lim.pending);
+    if (Array.isArray(lim.pending)) res.reasons.push(...lim.pending);
     if (lim.limit != null)
       res.legal = { rules: lim.rules, limit_m: lim.limit, diff_m: G.r2(d - lim.limit), pass: d <= lim.limit };
-    res.status = res.reasons.length ? "需人工確認" : res.legal.pass ? "符合" : "不符合";
+    res.status = res.reasons.length ? "需人工確認" : !res.legal ? "需人工確認" : res.legal.pass ? "符合" : "不符合";
 
     // 設計提示：專案保守值，不是法定門檻
-    if (res.legal && res.legal.pass && d >= res.legal.limit_m * P["P-NEAR"])
+    if (res.legal && res.legal.pass && Number.isFinite(P["P-NEAR"]) && d >= res.legal.limit_m * P["P-NEAR"])
       res.hints.push({ id: "P-NEAR", message: `已達法定上限的 ${Math.round(d / res.legal.limit_m * 100)}%（專案提示門檻 ${P["P-NEAR"] * 100}%）` });
-    for (const t of facts.turns) {
+    for (const t of facts.turns || []) {
+      if (!t || !Array.isArray(t.at) || !Number.isFinite(t.deflection_deg)) continue;
       const c = G.corridorAt(corridors, t.at);
-      if (c && t.deflection_deg >= P["P-TURN"] && c.clear_width_m != null && c.clear_width_m < P["P-CLEAR"])
+      if (c && Number.isFinite(P["P-TURN"]) && Number.isFinite(P["P-CLEAR"]) && t.deflection_deg >= P["P-TURN"] && c.clear_width_m != null && c.clear_width_m < P["P-CLEAR"])
         res.hints.push({ id: "P-TURN", at: t.at, message: `${c.name} 轉向 ${t.deflection_deg}°，淨寬 ${c.clear_width_m} m 小於專案值 ${P["P-CLEAR"]} m` });
     }
     return res;
   }
 
   function judgeCorridor(c, settings, habitableArea) {
+    c = c || {};
+    habitableArea = Number.isFinite(habitableArea) ? habitableArea : 0;
     const req = corridorRequirement(settings, habitableArea, c.rooms_both_sides);
     const out = { element_id: c.element_id, name: c.name, clear_width_m: c.clear_width_m, required_m: req.required, rule: req.rule, reasons: [...req.pending] };
     if (c.clear_width_m == null) { out.status = "模型資料不足"; out.reasons.push("走廊有效淨寬未標示"); }
