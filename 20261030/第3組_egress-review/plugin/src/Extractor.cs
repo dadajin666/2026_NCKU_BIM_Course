@@ -83,18 +83,16 @@ namespace Group3.EgressExporter
         }
         void ValidateSettings()
         {
-            if (settings == null) throw new ArgumentException("設定檔不能為 null。");
-            settings.rooms = settings.rooms ?? new List<RoomSetting>();
-            settings.stairs = settings.stairs ?? new List<StairSetting>();
-            settings.corridors = settings.corridors ?? new List<CorridorSetting>();
-            bool hasMappings = settings.rooms.Any() || settings.stairs.Any() || settings.corridors.Any();
+            PointRules.Normalize(settings);
+            bool hasMappings = settings.rooms.Any() || settings.doors.Any() || settings.stairs.Any() || settings.corridors.Any();
             if (hasMappings && (settings.model_guid != doc.ProjectInformation.UniqueId ||
                 settings.level_id != Id(level) || settings.phase_id != Id(phase)))
                 throw new ArgumentException("設定檔的模型、樓層或階段不符。請先匯出本樓層的設定範本。");
             var refs = settings.rooms.Select(x => x?.unique_id).Concat(settings.stairs.Select(x => x?.unique_id))
-                .Concat(settings.corridors.Select(x => x?.room_unique_id)).ToList();
+                .Concat(settings.doors.Select(x => x?.unique_id)).Concat(settings.corridors.Select(x => x?.room_unique_id)).ToList();
             if (refs.Any(string.IsNullOrWhiteSpace)) throw new ArgumentException("設定項目必須有 unique_id。");
             if (settings.rooms.GroupBy(x => x.unique_id).Any(x => x.Count() > 1) ||
+                settings.doors.GroupBy(x => x.unique_id).Any(x => x.Count() > 1) ||
                 settings.stairs.GroupBy(x => x.unique_id).Any(x => x.Count() > 1) ||
                 settings.corridors.GroupBy(x => x.room_unique_id).Any(x => x.Count() > 1))
                 throw new ArgumentException("設定檔有重複的元件項目。");
@@ -159,15 +157,43 @@ namespace Group3.EgressExporter
                 .Select(Id).Distinct().ToList();
             var rooms = result.rooms.Where(r => adjacent.Contains(r.element_id)).ToList();
             if (door.LevelId != level.Id && !rooms.Any()) return;
-            if (!(door.Location is LocationPoint point)) { Warn(door, "DOOR_NO_POSITION", "門沒有可用定位點，未加入 doors。", "error"); return; }
             string source;
-            var data = new DoorData { element_id = Id(door), unique_id = door.UniqueId, position = XY(point.Point),
+            var data = new DoorData { element_id = Id(door), unique_id = door.UniqueId,
                 room_ids = rooms.Select(r => r.element_id).ToList(), clear_width_m = ClearWidth(door, out source), clear_width_source = source };
+            XYZ candidate = null;
+            try
+            {
+                candidate = RevitPositions.DoorCandidate(door, level, out var candidateSource);
+                data.position_candidate = XY(candidate); data.position_source = candidateSource;
+            }
+            catch (Exception ex) { Warn(door, "DOOR_NO_POSITION", "無法取得門定位候選：" + ex.Message, "error"); }
+            var mapping = settings.doors.SingleOrDefault(d => d.unique_id == door.UniqueId);
+            if (mapping?.picked_point != null)
+            {
+                try
+                {
+                    RevitPositions.Validate(door, level, mapping.picked_point, false);
+                    data.position = mapping.picked_point.point_m.Take(2).ToArray();
+                    data.position_source = mapping.picked_point.source; data.position_confirmed = true;
+                }
+                catch (Exception ex) { Warn(door, "DOOR_POSITION_STALE", ex.Message, "error"); }
+            }
+            else if (candidate != null && data.position_source == "family_location_point")
+            {
+                data.position = XY(candidate);
+                Warn(door, "DOOR_INSERTION_POINT", "position 使用族群插入點；需確認它位在實際可通行門口。");
+            }
+            if (data.position == null)
+            {
+                data.position_confirmed = false;
+                result.unresolved_doors.Add(data);
+                Warn(door, "DOOR_POSITION_UNCONFIRMED", "門已擷取但位置待確認；請在本樓層使用「設定門位置」。候選點不會加入計算路網。", "error");
+                return;
+            }
             result.doors.Add(data);
             foreach (var r in rooms) r.door_ids.Add(data.element_id);
             if (!data.clear_width_m.HasValue) Warn(door, "DOOR_NO_CLEAR_WIDTH", "缺少有效淨寬；不採用一般門寬或族群名稱代替。");
             if (rooms.Count < 2) Warn(door, "DOOR_ROOM_ASSOCIATION_INCOMPLETE", "只找到 " + rooms.Count + " 個本樓層相鄰房間；可能為室外門、未建模通道或房間計算點問題。");
-            Warn(door, "DOOR_INSERTION_POINT", "position 使用族群插入點；需確認它位在實際可通行門口。");
         }
         void ReadStair(Stairs stair)
         {
@@ -192,7 +218,27 @@ namespace Group3.EgressExporter
             else Warn(stair, "STAIR_COMPOSITE_FOOTPRINT", "實際梯段／平台分別保存在 footprint_loops；前端需逐圈繪製。未用包圍矩形或凸包替代樓梯。");
             var mapping = settings.stairs.SingleOrDefault(x => x.unique_id == stair.UniqueId);
             data.is_direct_stair = mapping?.is_direct_stair;
-            if (mapping != null && !string.IsNullOrWhiteSpace(mapping.endpoint_unique_id))
+            if (mapping?.picked_point != null)
+            {
+                try
+                {
+                    if (mapping.endpoint_type != "first_step" && mapping.endpoint_type != "fire_door")
+                        throw new ArgumentException("請選擇第一階或防火門終點類型。");
+                    RevitPositions.Validate(stair, level, mapping.picked_point, true);
+                    if (mapping.endpoint_type == "fire_door")
+                    {
+                        var door = string.IsNullOrWhiteSpace(mapping.endpoint_unique_id) ? null : doc.GetElement(mapping.endpoint_unique_id) as FamilyInstance;
+                        if (door == null || door.Category?.Id.Value != (long)BuiltInCategory.OST_Doors || !MainModel(door) || !Exists(door))
+                            throw new ArgumentException("參考防火門已移除或不在本階段，請重新設定終點。");
+                        RevitPositions.Validate(door, level, new PickedPointSetting { point_m = mapping.picked_point.point_m,
+                            geometry_fingerprint = mapping.picked_point.reference_geometry_fingerprint }, false);
+                    }
+                    data.entry_point = mapping.picked_point.point_m.Take(2).ToArray(); data.endpoint_type = mapping.endpoint_type;
+                    data.endpoint_source = mapping.picked_point.source;
+                }
+                catch (Exception ex) { Warn(stair, "STAIR_ENDPOINT_STALE", ex.Message, "error"); }
+            }
+            else if (mapping != null && !string.IsNullOrWhiteSpace(mapping.endpoint_unique_id))
             {
                 var reference = doc.GetElement(mapping.endpoint_unique_id);
                 if (reference == null || !MainModel(reference) || !Exists(reference))
@@ -268,6 +314,8 @@ namespace Group3.EgressExporter
             model_guid = doc.ProjectInformation.UniqueId, level_id = Id(level), phase_id = Id(phase),
             clear_width_parameter = settings.clear_width_parameter,
             rooms = result.rooms.Select(r => new RoomSetting { unique_id = r.unique_id, is_habitable = r.is_habitable, is_circulation = r.is_circulation }).ToList(),
+            doors = result.doors.Concat(result.unresolved_doors).Select(d => settings.doors.SingleOrDefault(x => x.unique_id == d.unique_id) ??
+                new DoorSetting { unique_id = d.unique_id }).ToList(),
             stairs = result.stairs.Concat(result.unresolved_stairs).Select(s => settings.stairs.SingleOrDefault(x => x.unique_id == s.unique_id) ??
                 new StairSetting { unique_id = s.unique_id }).ToList(), corridors = settings.corridors
         };

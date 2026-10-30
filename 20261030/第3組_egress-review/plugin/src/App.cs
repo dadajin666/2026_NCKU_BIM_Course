@@ -24,6 +24,10 @@ namespace Group3.EgressExporter
             button.ToolTip = "唯讀匯出房間、門、樓梯、走廊與 warnings；不執行法規判定。";
             panel.AddItem(new PushButtonData("Group3Ids", "查看所選\n元件識別碼",
                 Assembly.GetExecutingAssembly().Location, typeof(InspectSelectionCommand).FullName));
+            panel.AddItem(new PushButtonData("Group3DoorPoint", "設定門\n位置",
+                Assembly.GetExecutingAssembly().Location, typeof(SetDoorPositionCommand).FullName));
+            panel.AddItem(new PushButtonData("Group3StairPoint", "設定樓梯\n終點",
+                Assembly.GetExecutingAssembly().Location, typeof(SetStairEndpointCommand).FullName));
             return Result.Succeeded;
         }
         public Result OnShutdown(UIControlledApplication app) => Result.Succeeded;
@@ -61,9 +65,13 @@ namespace Group3.EgressExporter
                 using (var form = new ExportForm(doc))
                 {
                     if (form.ShowDialog(new WindowHandle(command.Application.MainWindowHandle)) != DialogResult.OK) return Result.Cancelled;
-                    var settings = string.IsNullOrWhiteSpace(form.SettingsPath) ? new ExportSettings() : JsonFile.Read<ExportSettings>(form.SettingsPath);
+                    var settings = string.IsNullOrWhiteSpace(form.SettingsPath) ? LocalSettings.Load(doc, form.SelectedLevel, form.SelectedPhase) : JsonFile.Read<ExportSettings>(form.SettingsPath);
                     var extractor = new Extractor(doc, form.SelectedLevel, form.SelectedPhase, settings);
                     var snapshot = extractor.Run();
+                    var settingsCopy = form.OutputPath + ".settings.json";
+                    if (File.Exists(settingsCopy)) settingsCopy = form.OutputPath + ".settings-" + Guid.NewGuid().ToString("N") + ".json";
+                    JsonFile.Write(settingsCopy, settings);
+                    snapshot.project.settings_file = Path.GetFileName(settingsCopy);
                     JsonFile.Write(form.OutputPath, snapshot);
                     // Keep user's settings intact; template only written when its path is new.
                     var templatePath = Path.Combine(Path.GetDirectoryName(form.OutputPath),
@@ -105,7 +113,7 @@ namespace Group3.EgressExporter
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 100));
             Controls.Add(layout);
-            var note = new Label { Text = "選擇一個樓層與階段。只擷取主文件／主模型；不修改 Revit 元件。\n第一次可不載入設定，匯出後依 settings-template.json 確認空間分類與樓梯終點。",
+            var note = new Label { Text = "選擇一個樓層與階段。只擷取主文件／主模型；不修改 Revit 元件。\n設定留空：自動使用「設定門位置／樓梯終點」儲存的本機設定。選擇 JSON：改用該檔。",
                 AutoSize = true, MaximumSize = new System.Drawing.Size(640, 0), Padding = new Padding(0, 0, 0, 18) };
             layout.Controls.Add(note, 0, 0); layout.SetColumnSpan(note, 3);
             layout.Controls.Add(new Label { Text = "樓層", AutoSize = true }, 0, 1); layout.Controls.Add(levels, 1, 1); layout.SetColumnSpan(levels, 2);
@@ -152,7 +160,7 @@ namespace Group3.EgressExporter
             var layout = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 3, ColumnCount = 1, Padding = new Padding(12) };
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 90)); layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 45));
             Controls.Add(layout);
-            layout.Controls.Add(new Label { Dock = DockStyle.Fill, Text = $"房間 {snapshot.rooms.Count}　門 {snapshot.doors.Count}　樓梯 {snapshot.stairs.Count + snapshot.unresolved_stairs.Count}（終點未定 {snapshot.unresolved_stairs.Count}）　走廊 {snapshot.corridors.Count}\n缺漏／提醒 {snapshot.warnings.Count} 項（不代表法規判定）\n{path}" }, 0, 0);
+            layout.Controls.Add(new Label { Dock = DockStyle.Fill, Text = $"{snapshot.project.level.name}／{snapshot.project.phase}　房間 {snapshot.rooms.Count}　門 {snapshot.doors.Count}（另有待定位 {snapshot.unresolved_doors.Count}）\n樓梯 {snapshot.stairs.Count + snapshot.unresolved_stairs.Count}（終點未定 {snapshot.unresolved_stairs.Count}）　走廊 {snapshot.corridors.Count}　缺漏／提醒 {snapshot.warnings.Count} 項（不代表法規判定）\n{path}" }, 0, 0);
             var grid = new DataGridView { Dock = DockStyle.Fill, ReadOnly = true, AllowUserToAddRows = false, AllowUserToDeleteRows = false,
                 AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill, SelectionMode = DataGridViewSelectionMode.FullRowSelect };
             grid.Columns.Add("id", "Element ID"); grid.Columns.Add("code", "問題代碼"); grid.Columns.Add("message", "說明");

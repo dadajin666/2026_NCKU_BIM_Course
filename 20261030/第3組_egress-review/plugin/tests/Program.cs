@@ -8,6 +8,12 @@ static class Program
 {
     static void Check(bool condition, string description) { if (!condition) throw new Exception(description); Console.WriteLine("PASS " + description); }
     static double[] P(double x, double y) => new[] { x, y };
+    static void Reject(Action action, string description)
+    {
+        bool rejected = false;
+        try { action(); } catch (ArgumentException) { rejected = true; }
+        Check(rejected, description);
+    }
     static void Main()
     {
         var ring = Geometry.Ring(new[] { P(0,0), P(10,0), P(10,4), P(0,4), P(0,0) });
@@ -34,6 +40,45 @@ static class Program
             Check(copy.project.model_name == snapshot.project.model_name, "Chinese and special characters round-trip");
             JsonFile.Write(file, snapshot);
             Check(bytes.SequenceEqual(File.ReadAllBytes(file)), "same snapshot serializes deterministically and replaces atomically");
+            var vertices = new[] { new[] { 10.0, 20.0, 8.0 }, new[] { 11.0, 20.2, 10.0 } };
+            var fingerprint = PointRules.Fingerprint(vertices, "door-uid|type");
+            var selected = new PickedPointSetting { point_m = new[] { 10.5, 20.1, 8.0 },
+                geometry_fingerprint = fingerprint, source = "user_picked_plan_point" };
+            PointRules.ValidatePoint(selected, fingerprint, 8, vertices[0], vertices[1], 0.5);
+            Check(fingerprint == PointRules.Fingerprint(vertices.Reverse(), "door-uid|type"), "geometry fingerprint is stable across enumeration order");
+            var moved = vertices.Select(v => new[] { v[0] + 1, v[1], v[2] }).ToArray();
+            Reject(() => PointRules.ValidatePoint(selected, PointRules.Fingerprint(moved, "door-uid|type"), 8,
+                moved[0], moved[1], 0.5), "moving the door invalidates an old point before it can enter the network");
+            Reject(() => PointRules.ValidatePoint(selected, fingerprint, 12, vertices[0], vertices[1], 0.5), "point from another floor is rejected");
+            Reject(() => PointRules.ValidatePoint(new PickedPointSetting { point_m = new[] { 10.5, 20.1, double.NaN },
+                geometry_fingerprint = fingerprint }, fingerprint, 8, vertices[0], vertices[1], 0.5), "non-finite point is rejected");
+            Reject(() => PointRules.ValidatePoint(new PickedPointSetting { point_m = new[] { 50.0, 50.0, 8.0 },
+                geometry_fingerprint = fingerprint }, fingerprint, 8, vertices[0], vertices[1], 0.5), "distant click is rejected");
+            Reject(() => PointRules.ValidatePoint(new PickedPointSetting { point_m = selected.point_m }, fingerprint,
+                8, vertices[0], vertices[1], 0.5), "legacy point without a geometry fingerprint requires confirmation");
+            File.WriteAllText(file, "{\"model_guid\":\"model\",\"level_id\":\"L3\",\"phase_id\":\"new\",\"rooms\":[],\"stairs\":[{\"unique_id\":\"stair\",\"is_direct_stair\":null,\"endpoint_type\":\"first_step\",\"endpoint_unique_id\":\"curve\",\"curve_end\":1}],\"corridors\":[]}");
+            var legacy = PointRules.Normalize(JsonFile.Read<ExportSettings>(file));
+            Check(legacy.doors.Count == 0 && legacy.stairs[0].picked_point == null && legacy.stairs[0].curve_end == 1,
+                "old JSON without door or picked-point fields remains readable");
+            PointRules.ValidateScope(legacy, "model", "L3", "new");
+            Reject(() => PointRules.ValidateScope(legacy, "model", "L1", "new"), "settings for a different floor cannot be applied");
+            Reject(() => PointRules.ValidateScope(legacy, "other", "L3", "new"), "settings for another model cannot be applied");
+            Reject(() => PointRules.ValidateScope(legacy, "model", "L3", "existing"), "settings for another phase cannot be applied");
+            PointRules.SetDoor(legacy, new DoorSetting { unique_id = "door", picked_point = selected });
+            PointRules.SetDoor(legacy, new DoorSetting { unique_id = "door", picked_point = selected });
+            Check(legacy.doors.Count == 1 && legacy.stairs[0].endpoint_unique_id == "curve", "updating a door keeps unrelated staircase settings and does not duplicate the door");
+            PointRules.SetStair(legacy, new StairSetting { unique_id = "stair", endpoint_type = "first_step", picked_point = selected });
+            JsonFile.Write(file, legacy);
+            var roundTrip = JsonFile.Read<ExportSettings>(file);
+            Check(roundTrip.stairs.Count == 1 && roundTrip.stairs[0].picked_point.point_m.SequenceEqual(selected.point_m) &&
+                roundTrip.stairs[0].is_direct_stair == null && roundTrip.doors.Count == 1,
+                "picked staircase endpoint and unknown qualification persist without losing door settings");
+            snapshot.unresolved_doors.Add(new DoorData { element_id = "door", position_candidate = new[] { 10.5, 20.1 },
+                position_source = "bounding_box_candidate", position_confirmed = false });
+            JsonFile.Write(file, snapshot);
+            copy = JsonFile.Read<Snapshot>(file);
+            Check(copy.doors.Count == 0 && copy.unresolved_doors.Count == 1 && copy.unresolved_doors[0].position == null,
+                "candidate doors remain outside routing doors and preserve their suggested coordinate");
         }
         finally { if (File.Exists(file)) File.Delete(file); }
     }

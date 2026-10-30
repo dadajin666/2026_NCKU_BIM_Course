@@ -14,6 +14,7 @@ namespace Group3.EgressExporter
         [DataMember] public ProjectData project;
         [DataMember] public List<RoomData> rooms = new List<RoomData>();
         [DataMember] public List<DoorData> doors = new List<DoorData>();
+        [DataMember] public List<DoorData> unresolved_doors = new List<DoorData>();
         [DataMember] public List<StairData> stairs = new List<StairData>();
         [DataMember] public List<StairData> unresolved_stairs = new List<StairData>();
         [DataMember] public List<CorridorData> corridors = new List<CorridorData>();
@@ -25,6 +26,7 @@ namespace Group3.EgressExporter
         [DataMember] public string model_name, model_guid, revit_version, phase, design_option;
         [DataMember] public string unit = "m", coordinate = "Revit 專案座標（Internal Origin）";
         [DataMember] public string extracted_at, model_version, phase_id, level_id;
+        [DataMember] public string settings_file;
         [DataMember] public bool has_unsaved_changes;
         [DataMember] public LevelData level;
         [DataMember] public string model_guid_source = "ProjectInformation.UniqueId (另存副本可能相同)";
@@ -51,6 +53,9 @@ namespace Group3.EgressExporter
         [DataMember] public string element_id, unique_id;
         [DataMember] public List<string> room_ids = new List<string>();
         [DataMember] public double[] position;
+        [DataMember] public double[] position_candidate;
+        [DataMember] public string position_source;
+        [DataMember] public bool? position_confirmed;
         [DataMember] public double? clear_width_m;
         [DataMember] public string clear_width_source;
     }
@@ -88,6 +93,7 @@ namespace Group3.EgressExporter
         [DataMember] public string model_guid, level_id, phase_id;
         [DataMember] public string clear_width_parameter = "Egress_ClearWidth";
         [DataMember] public List<RoomSetting> rooms = new List<RoomSetting>();
+        [DataMember] public List<DoorSetting> doors = new List<DoorSetting>();
         [DataMember] public List<StairSetting> stairs = new List<StairSetting>();
         [DataMember] public List<CorridorSetting> corridors = new List<CorridorSetting>();
     }
@@ -103,6 +109,18 @@ namespace Group3.EgressExporter
         // Explicit endpoint reference: a door insertion point or one end of a chosen curve.
         [DataMember] public string endpoint_unique_id, endpoint_type;
         [DataMember] public int curve_end;
+        [DataMember] public PickedPointSetting picked_point;
+    }
+    [DataContract] public class PickedPointSetting
+    {
+        // Internal-Origin XYZ in metres. Fingerprint invalidates a point after geometry changes.
+        [DataMember] public double[] point_m;
+        [DataMember] public string geometry_fingerprint, reference_geometry_fingerprint, source;
+    }
+    [DataContract] public class DoorSetting
+    {
+        [DataMember] public string unique_id;
+        [DataMember] public PickedPointSetting picked_point;
     }
     [DataContract] public class CorridorSetting
     {

@@ -4,11 +4,18 @@ $framework = if ($RevitVersion -eq '2027') { 'net10.0-windows' } else { 'net48' 
 $source = Join-Path $PSScriptRoot "bin\$RevitVersion\Release\$framework\Group3.EgressExporter.dll"
 if (!(Test-Path -LiteralPath $source)) { throw "Build first: $source" }
 $root = Join-Path $env:APPDATA "Autodesk\Revit\Addins\$RevitVersion"
-$target = Join-Path $root 'Group3.EgressExporter'
+$packageRoot = Join-Path $root 'Group3.EgressExporter'
+# Keep loaded assemblies intact. Revit reads the updated manifest on its next start.
+$hash = (Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash.ToLowerInvariant()
+$target = Join-Path $packageRoot $hash
 [IO.Directory]::CreateDirectory($target) | Out-Null
 $assembly = Join-Path $target 'Group3.EgressExporter.dll'
-# A loaded DLL cannot be replaced; fail clearly and keep existing manifest intact.
-Copy-Item -LiteralPath $source -Destination $assembly -Force
+if (!(Test-Path -LiteralPath $assembly)) {
+    Copy-Item -LiteralPath $source -Destination $assembly
+}
+if ((Get-FileHash -LiteralPath $assembly -Algorithm SHA256).Hash.ToLowerInvariant() -ne $hash) {
+    throw 'Installed assembly hash mismatch; manifest was not changed.'
+}
 $escapedAssembly = [Security.SecurityElement]::Escape($assembly)
 $manifest = @"
 <?xml version="1.0" encoding="utf-8"?>
@@ -23,6 +30,14 @@ $manifest = @"
   </AddIn>
 </RevitAddIns>
 "@
-[IO.File]::WriteAllText((Join-Path $root 'Group3.EgressExporter.addin'), $manifest, [Text.UTF8Encoding]::new($false))
-Write-Output "Installed: $assembly"
+$manifestPath = Join-Path $root 'Group3.EgressExporter.addin'
+$pendingManifest = Join-Path $root ('Group3.EgressExporter.' + [Guid]::NewGuid().ToString('N') + '.tmp')
+[IO.File]::WriteAllText($pendingManifest, $manifest, [Text.UTF8Encoding]::new($false))
+if (Test-Path -LiteralPath $manifestPath) {
+    $backup = Join-Path $packageRoot ('manifest-' + [Guid]::NewGuid().ToString('N') + '.backup')
+    [IO.File]::Replace($pendingManifest, $manifestPath, $backup)
+} else {
+    [IO.File]::Move($pendingManifest, $manifestPath)
+}
+Write-Output "Prepared for next Revit start: $assembly"
 Write-Output 'Save your model and restart Revit to load the add-in.'
