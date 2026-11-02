@@ -322,10 +322,15 @@ namespace Group3.EgressExporter
                 data.entry_point = XY(point); data.endpoint_type = mapping.endpoint_type;
                 data.endpoint_source = "user_confirmed:" + reference.UniqueId;
             }
-            if (data.entry_point == null) AutoEndpoint(stair, data);
+            // An explicit endpoint must be re-confirmed if it fails validation. Automatic
+            // detection must not replace it and inherit the old direct-stair qualification.
+            bool hasManualEndpoint = mapping?.picked_point != null || !string.IsNullOrWhiteSpace(mapping?.endpoint_unique_id);
+            if (data.entry_point == null && !hasManualEndpoint) AutoEndpoint(stair, data);
             if (data.entry_point == null) {
                 data.is_direct_stair = data.is_direct_stair == false ? (bool?)false : null;
-                Warn(stair, "STAIR_ENDPOINT_UNCONFIRMED", "偵測不到本層的第一階；請用「手動指定樓梯終點」。不會拿樓梯中心點代替。", "error");
+                Warn(stair, "STAIR_ENDPOINT_UNCONFIRMED", hasManualEndpoint ?
+                    "人工樓梯終點無效，請重新設定；不會改用自動端點並沿用舊確認。" :
+                    "偵測不到本層的第一階；請用「手動指定樓梯終點」。不會拿樓梯中心點代替。", "error");
             }
             if (!data.is_direct_stair.HasValue) Warn(stair, "STAIR_DIRECT_UNCONFIRMED", "還沒選定是否使用這座樓梯；仍列入計算候選，但結果會標需人工確認。請按「選擇直通梯」。");
         }
