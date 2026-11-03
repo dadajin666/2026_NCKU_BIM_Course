@@ -1,8 +1,7 @@
 <title>逃生動線檢討台</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
-/* 版面：批次資訊列 → 專案設定 → 四類指標 → 居室卡片 → 平面畫布＋明細 → 走廊、修正清單、批次紀錄 */
+/* 版面：來源資訊 → 唯讀檢討條件 → 結果指標 → 居室卡片 → 平面畫布＋明細 */
 :root {
   --bg: #eef1f2; --panel: #ffffff; --ink: #1d2427; --muted: #5f6b70; --line: #cfd6d9;
   --ok: #12804a; --ok-soft: #d8efe2;
@@ -14,16 +13,6 @@
   --f-body: "Noto Sans TC", "Microsoft JhengHei", "PingFang TC", sans-serif;
   --f-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
 }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
-  --bg: #13181a; --panel: #1b2124; --ink: #e3e9eb; --muted: #94a2a7; --line: #313b3f;
-  --ok: #3fbf7f; --ok-soft: #17382a; --bad: #ef6b5f; --bad-soft: #43201d; --ask: #e0a640; --ask-soft: #3d2f14;
-  --gap: #9fb4c6; --gap-soft: #263039; --hint: #b892e6; --hint-soft: #2f2440;
-  --room: #20282b; --corr: #2a3337; --sel: #6aa9e6; color-scheme: dark } }
-:root[data-theme="dark"] {
-  --bg: #13181a; --panel: #1b2124; --ink: #e3e9eb; --muted: #94a2a7; --line: #313b3f;
-  --ok: #3fbf7f; --ok-soft: #17382a; --bad: #ef6b5f; --bad-soft: #43201d; --ask: #e0a640; --ask-soft: #3d2f14;
-  --gap: #9fb4c6; --gap-soft: #263039; --hint: #b892e6; --hint-soft: #2f2440;
-  --room: #20282b; --corr: #2a3337; --sel: #6aa9e6; color-scheme: dark }
 
 body { background: var(--bg); color: var(--ink); font-family: var(--f-body); line-height: 1.55; }
 .wrap { max-width: 1280px; margin: 0 auto; padding-block: 20px 40px;
@@ -83,7 +72,7 @@ button:disabled { background: transparent; color: var(--muted); border-color: va
 svg.plan { width: 100%; min-width: 580px; height: auto; display: block; }
 .plan text { font-family: var(--f-body); fill: var(--ink); }
 .plan .room { fill: var(--room); stroke: var(--ink); stroke-width: 2; cursor: pointer; }
-.plan .room.st-bad { fill: url(#p-bad); } .plan .room.st-ask { fill: url(#p-ask); }
+.plan .room.st-bad { fill: url(#p-bad); } .plan .room.st-ask { fill: var(--ask-soft); }
 .plan .room.st-gap { fill: var(--gap-soft); stroke-dasharray: 8 5; } .plan .room.st-hint { fill: url(#p-hint); }
 .plan .room.sel { stroke: var(--sel); stroke-width: 4; }
 .plan .stair { fill: var(--ok-soft); stroke: var(--ok); stroke-width: 2; }
@@ -91,11 +80,12 @@ svg.plan { width: 100%; min-width: 580px; height: auto; display: block; }
 .plan .stair.unresolved { fill: none; stroke-dasharray: 6 4; opacity: .7; }
 .plan .entry { fill: var(--ok); }
 .plan .corr { fill: var(--corr); } .plan .corr.narrow { fill: url(#p-bad); }
-.plan .door { stroke: var(--panel); stroke-width: 5; } .plan .door.nodata { stroke: var(--gap); stroke-dasharray: 3 2; }
+.plan .door { stroke: var(--panel); stroke-width: 5; }
+/* 未知淨寬的門不加繪額外線段，避免灰色虛線干擾；門資料及計算仍保留。 */
+.plan .door.nodata { display: none; }
 .plan .path { fill: none; stroke: var(--sel); stroke-width: 3; stroke-linejoin: round; stroke-dasharray: 8 5; }
 @media (prefers-reduced-motion: no-preference) { .plan .path { animation: walk 1.2s linear infinite; } }
 @keyframes walk { to { stroke-dashoffset: -26; } }
-.plan .alt { fill: none; stroke: var(--muted); stroke-width: 2; stroke-dasharray: 2 5; }
 .plan .start { fill: var(--panel); stroke: var(--sel); stroke-width: 3; }
 .plan .end { fill: var(--sel); }
 .plan .mk circle { fill: var(--ink); } .plan .mk text { fill: var(--panel); font-size: 11px; font-weight: 700; font-family: var(--f-mono); }
@@ -104,9 +94,7 @@ svg.plan { width: 100%; min-width: 580px; height: auto; display: block; }
 .plan .val { font-size: 11px; font-family: var(--f-mono); fill: var(--muted); pointer-events: none; }
 .plan .dim line { stroke: var(--muted); stroke-width: 1; } .plan .dim text { font-size: 10px; fill: var(--muted); font-family: var(--f-mono); }
 .plan .pat-bg-bad { fill: var(--bad-soft); } .plan .pat-ln-bad { stroke: var(--bad); stroke-width: 1.4; }
-.plan .pat-bg-ask { fill: var(--ask-soft); } .plan .pat-dot-ask { fill: var(--ask); }
 .plan .pat-bg-hint { fill: var(--hint-soft); } .plan .pat-ln-hint { stroke: var(--hint); stroke-width: 1; }
-.plan .titleblock text { font-size: 10px; fill: var(--muted); font-family: var(--f-mono); }
 .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 8px; font-size: .76rem; color: var(--muted); }
 .sw { display: inline-block; width: 14px; height: 12px; border: 1px solid var(--line); vertical-align: -2px; margin-right: 4px; }
 
@@ -142,6 +130,43 @@ td.n, th.n { text-align: right; font-family: var(--f-mono); font-variant-numeric
   .main, .grid2 { grid-template-columns: minmax(0, 1fr); }
   .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* 第 02 版：條件唯讀，資料更新回 Revit 進行。 */
+.settings{gap:0;padding:23px 26px}.condition-head{display:flex;justify-content:space-between;align-items:center;gap:12px}.eyebrow{font:10px var(--f-mono);letter-spacing:2px;color:var(--muted);margin-bottom:6px}.condition-head h2{font-size:16px;letter-spacing:0;color:var(--ink);font-weight:700;margin:0}.readonly-tag{font-size:12px;color:var(--sel);background:var(--bg);border:1px solid var(--line);border-radius:99px;padding:5px 12px}.condition-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px;margin:23px 0}.condition-item{display:grid;gap:8px;border-left:2px solid var(--line);padding-left:15px}.condition-item>span{font-size:12px;color:var(--muted)}.condition-item strong{font-size:23px;font-weight:500;color:var(--ink)}.condition-item strong.unknown{color:var(--ask);font-size:18px}.condition-note{font-size:12px;color:var(--muted);padding-top:17px;border-top:1px solid var(--line);margin:0}.settings .toast{margin-top:10px;font-size:12px}.settings .toast:empty{display:none}.card{border-radius:10px}.foot{border-top:1px solid var(--line);padding-top:16px;line-height:1.8}
+@media(max-width:760px){.settings{padding:18px}.condition-head{align-items:start}.condition-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}.condition-item strong{font-size:20px}.readonly-tag{font-size:10px}}
+
+
+.plan .room-label text{paint-order:stroke fill;stroke:var(--panel);stroke-width:3px;stroke-linejoin:round;pointer-events:none}.plan .stair{fill-opacity:.25}.plan .stair-marker{color:var(--ok)}.plan .stair-marker.unresolved{color:var(--ask)}.plan .stair-leader{fill:none;stroke:currentColor;stroke-width:1.2;stroke-dasharray:4 3;opacity:.85}.plan .stair-anchor{fill:currentColor;stroke:var(--panel);stroke-width:1.5}.plan .stair-label-bg{fill:var(--panel);stroke:currentColor;stroke-width:1}.plan .stair-icon{fill:none;stroke:currentColor;stroke-width:2;stroke-linejoin:round}.plan .stair-label-name{font-size:11px;font-weight:700;fill:currentColor}.plan .stair-label-note{font-size:8px;fill:var(--muted)}
+
+/* iOS-inspired presentation; all model data and review calculations remain unchanged. */
+:root{color-scheme:light;--bg:#f2f2f7;--panel:#fff;--ink:#1c1c1e;--muted:#6c6c70;--line:#e5e5ea;--sel:#007aff;--ok:#228547;--ok-soft:#e8f7ed;--bad:#d73530;--bad-soft:#ffebe9;--ask:#946100;--ask-soft:#fff4d6;--gap:#56677b;--gap-soft:#e9eef5;--hint:#8650b9;--hint-soft:#f2eafa;--room:#fbfcfe;--corr:#e9eff6;--f-body:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI","Microsoft JhengHei",sans-serif;--f-mono:ui-monospace,"SFMono-Regular",Consolas,monospace}
+body{background:radial-gradient(ellipse at 20% 0%,#e8f1ff 0,transparent 38%),var(--bg);font-size:14px;letter-spacing:-.015em;-webkit-font-smoothing:antialiased}.wrap{max-width:1380px;gap:20px;padding-top:32px;padding-bottom:48px}header{gap:14px;padding:4px 8px 8px}h1{font-size:32px;letter-spacing:-1px;font-weight:750;line-height:1.3}.tag{border-radius:8px;padding:5px 9px;font-size:11px;vertical-align:middle;letter-spacing:0;font-weight:600}.meta{gap:7px 18px;font-size:12px;line-height:1.8}.meta b{font-weight:600}.card{border:1px solid rgba(255,255,255,.85);border-radius:22px;background:rgba(255,255,255,.94);box-shadow:0 4px 24px rgba(28,42,66,.035);padding:22px}h2{font-size:12px;letter-spacing:.02em;font-weight:600;color:var(--muted);margin-bottom:14px}.settings{padding:24px 28px}.condition-head h2{font-size:17px;letter-spacing:-.3px}.eyebrow{font:10px var(--f-body);font-weight:600;letter-spacing:1.5px;margin-bottom:7px}.readonly-tag{border:0;background:#edf5ff;color:#0065d1;padding:7px 12px;font-size:11px;font-weight:600}.condition-grid{margin:26px 0;gap:28px}.condition-item{border-left:0;padding-left:0;gap:9px}.condition-item+ .condition-item{border-left:1px solid var(--line);padding-left:25px}.condition-item>span{font-size:12px}.condition-item strong{font:600 26px var(--f-body);letter-spacing:-.5px}.condition-note{border-color:#f0f0f4;font-size:12px;line-height:1.8}.settings .toast{font-size:11px;color:var(--muted);line-height:1.7}.kpis{gap:12px}.kpi{border:1px solid transparent;border-radius:18px;padding:17px 19px;background:rgba(255,255,255,.85);box-shadow:0 3px 16px rgba(28,42,66,.025);transition:background .15s,box-shadow .15s}.kpi .n{font:600 27px var(--f-body);letter-spacing:-1px}.kpi .l{font-size:11px;margin-top:5px}.kpi[aria-pressed="true"]{background:#edf5ff;border-color:#b5d7ff;box-shadow:0 0 0 2px rgba(0,122,255,.12)}.badge{font-size:11px;font-weight:600;padding:3px 8px;border-radius:7px}.rooms{gap:12px;grid-template-columns:repeat(auto-fill,minmax(190px,1fr))}.rc{border:1px solid #ededf2;border-radius:16px;padding:14px;gap:9px;background:#fafafd;transition:background .15s,border-color .15s}.rc:hover{background:#f0f5ff;border-color:#c6dfff}.rc.sel{background:#eef5ff;border-color:#78b6ff;box-shadow:0 0 0 2px rgba(0,122,255,.10)}.rc .nm{font-size:13px;font-weight:650}.rc .d{font-size:12px}.rc .x{font-size:11px;line-height:1.6}.main{gap:20px;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr)}.main>.card{padding:22px}.seg{padding:3px;gap:3px;background:#efeff4;border:0;border-radius:10px;margin-bottom:15px}.seg button{min-height:30px;padding:5px 14px;border-radius:8px;font-size:12px;font-weight:600;color:var(--muted)}.seg button[aria-pressed="true"]{background:white;color:var(--ink);box-shadow:0 2px 5px rgba(0,0,0,.12)}button{border-radius:11px;font-size:13px;padding:10px 15px;font-weight:600;border:1px solid transparent;transition:opacity .15s}button:active{opacity:.72}button.ghost{background:#edf5ff;color:#0064d1;border:0}.layers{font-size:11px;gap:9px 13px;padding-bottom:15px;margin-bottom:12px;border-bottom:1px solid #f0f0f4}.layers label{align-items:center;gap:5px}input[type=checkbox]{accent-color:#007aff;width:14px;height:14px;margin:0}select,input[type=number],textarea{border:1px solid #e8e8ed;background:#f7f7fa;border-radius:10px;padding:9px 11px;font-size:13px;color:var(--ink)}.plan-scroll{border-radius:14px;background:#fcfcfe;padding:9px 0}.plan .room{stroke:#737f8d;stroke-width:1.5}.plan .room.sel{stroke:#007aff;stroke-width:3}.plan .path{stroke-width:2.7}.plan .door{stroke:#8eabbf;stroke-width:4}.plan .door.nodata{stroke:#a3b2c2}.plan .room-label text{stroke:#fcfcfe;stroke-width:3px}.plan .stair-label-bg{rx:9}.legend{font-size:10px;gap:7px 12px;line-height:1.7;margin-top:13px}.sw{border-radius:3px;width:12px;height:10px}.detail{gap:14px}.detail h3{font-size:21px;letter-spacing:-.5px}.detail .head>.muted,.detail .head .muted{font-size:11px!important;line-height:1.7}.blk{border-color:#efeff4;padding-top:14px;gap:8px;font-size:12px}.blk h4{font-size:11px;font-weight:650;letter-spacing:0}.blk p{line-height:1.8}.bar{border-radius:99px;height:7px}.bar>span{border-radius:99px}.barcap{font-size:11px}dl{gap:6px 10px}.foot{font-size:10px;border-color:#dedee7;line-height:1.9;padding:18px 7px 0;opacity:.85}pre{border-radius:10px;background:#f5f5fa;border:0}details summary{font-size:11px}textarea{line-height:1.6;min-height:76px}
+@media(max-width:960px){.main{grid-template-columns:1fr}.wrap{padding-top:22px}.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){h1{font-size:27px}.wrap{gap:15px}.card,.settings,.main>.card{padding:18px;border-radius:19px}.condition-grid{gap:20px}.condition-item+ .condition-item{border-left:0;padding-left:0}.condition-item strong{font-size:23px}.condition-head{align-items:start;gap:9px}.readonly-tag{max-width:110px;font-size:10px;text-align:center}.rooms{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.rc{padding:11px}.rc .top{align-items:start;flex-wrap:wrap}.meta{font-size:11px}.kpi{padding:14px}.plan-scroll{overflow-x:auto}}
+@media(prefers-reduced-motion:reduce){button,.rc,.kpi{transition:none}}
+
+/* Liquid glass: translucent surfaces, optical edge highlights and restrained refraction. */
+:root{--bg:#edf1fa;--line:rgba(100,120,155,.16);--panel:#fff;--muted:#52627a}
+body{background:radial-gradient(ellipse 54vw 65vh at 7% 4%,rgba(98,184,255,.34),transparent 78%),radial-gradient(ellipse 50vw 65vh at 95% 28%,rgba(184,157,255,.29),transparent 80%),radial-gradient(ellipse 55vw 65vh at 20% 85%,rgba(123,222,212,.25),transparent 80%),radial-gradient(ellipse 40vw 50vh at 78% 92%,rgba(255,197,213,.23),transparent 80%),linear-gradient(135deg,#eef5fc,#f0eff9 52%,#eaf4f6);background-attachment:fixed;isolation:isolate}
+.wrap{position:relative;gap:22px}.card,.kpi{position:relative;background:linear-gradient(135deg,rgba(255,255,255,.70),rgba(255,255,255,.28) 48%,rgba(255,255,255,.45));border:1px solid rgba(255,255,255,.8);box-shadow:inset 0 1px 0 rgba(255,255,255,.95),inset 1px 0 0 rgba(255,255,255,.45),inset 0 -1px 0 rgba(113,147,180,.12),0 10px 36px rgba(50,77,120,.065),0 2px 6px rgba(50,77,120,.025);backdrop-filter:blur(28px) saturate(165%);-webkit-backdrop-filter:blur(28px) saturate(165%)}
+.card{border-radius:27px}.card::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;border:1px solid transparent;background:linear-gradient(140deg,rgba(255,255,255,.98),rgba(255,255,255,.05) 42%,rgba(255,255,255,.58) 78%,rgba(255,255,255,.15)) border-box;-webkit-mask:linear-gradient(#fff 0 0) padding-box,linear-gradient(#fff 0 0);-webkit-mask-composite:xor;mask-composite:exclude}
+header{position:relative;padding:12px 12px 10px}h1{text-shadow:0 1px 0 rgba(255,255,255,.8)}.meta{color:#52627a}.meta b{color:#22314b}.tag{background:rgba(255,244,208,.76);border:1px solid rgba(255,255,255,.8);box-shadow:inset 0 1px 0 rgba(255,255,255,.85);backdrop-filter:blur(12px)}
+.settings{background:linear-gradient(120deg,rgba(255,255,255,.77),rgba(255,255,255,.35) 58%,rgba(233,244,255,.43));box-shadow:inset 0 1px 0 rgba(255,255,255,1),inset 0 -1px 0 rgba(255,255,255,.6),0 12px 42px rgba(46,86,148,.075)}.condition-note{border-top-color:rgba(116,143,175,.16)}.condition-item+ .condition-item{border-left-color:rgba(116,143,175,.16)}.readonly-tag{background:linear-gradient(150deg,rgba(255,255,255,.88),rgba(208,231,255,.43));border:1px solid rgba(255,255,255,.9);box-shadow:inset 0 1px 0 #fff,0 3px 10px rgba(0,95,180,.05);color:#005bbd}
+.kpi{border-radius:21px;background:linear-gradient(145deg,rgba(255,255,255,.7),rgba(255,255,255,.31));transition:background .2s,box-shadow .2s,transform .2s}.kpi:hover{background:linear-gradient(145deg,rgba(255,255,255,.86),rgba(255,255,255,.49));transform:translateY(-2px)}.kpi[aria-pressed="true"]{background:linear-gradient(145deg,rgba(244,251,255,.93),rgba(189,223,255,.56));border-color:rgba(88,167,255,.65);box-shadow:inset 0 1px 0 #fff,0 5px 22px rgba(0,122,255,.12)}
+.rc{background:linear-gradient(145deg,rgba(255,255,255,.65),rgba(255,255,255,.25));border:1px solid rgba(255,255,255,.76);box-shadow:inset 0 1px 0 rgba(255,255,255,.9),0 3px 12px rgba(58,78,109,.025);border-radius:18px;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}.rc:hover{background:linear-gradient(145deg,rgba(255,255,255,.9),rgba(222,239,255,.5));border-color:rgba(141,195,255,.6)}.rc.sel{background:linear-gradient(135deg,rgba(255,255,255,.86),rgba(183,219,255,.46));border-color:rgba(0,122,255,.53);box-shadow:inset 0 1px 0 #fff,inset 0 0 0 1px rgba(255,255,255,.5),0 4px 17px rgba(0,104,221,.09)}.rc .x{color:#596a81}.badge{box-shadow:inset 0 1px 0 rgba(255,255,255,.66)}
+.seg{background:rgba(164,181,206,.2);border:1px solid rgba(255,255,255,.66);box-shadow:inset 0 1px 4px rgba(72,97,130,.05);padding:4px;border-radius:14px;backdrop-filter:blur(16px)}.seg button{border-radius:10px}.seg button[aria-pressed="true"]{background:linear-gradient(155deg,rgba(255,255,255,.98),rgba(255,255,255,.66));box-shadow:inset 0 1px 0 #fff,0 3px 7px rgba(59,80,109,.13);border:1px solid rgba(255,255,255,.88)}
+.layers{border-color:rgba(116,143,175,.16)}.plan-scroll{background:rgba(255,255,255,.84);border:1px solid rgba(255,255,255,.96);border-radius:19px;box-shadow:inset 0 1px 0 #fff,0 2px 8px rgba(60,86,120,.02)}.plan .room-label text{stroke:#fff}.plan .stair-label-bg{fill:#fff}.detail{background:linear-gradient(145deg,rgba(255,255,255,.80),rgba(255,255,255,.46));}.blk{border-color:rgba(116,143,175,.16)}.detail select,.detail textarea{background:rgba(255,255,255,.58);border:1px solid rgba(255,255,255,.88);box-shadow:inset 0 1px 3px rgba(60,86,120,.035)}button.ghost{background:rgba(222,239,255,.65);border:1px solid rgba(255,255,255,.82)}.foot{border-color:rgba(100,130,165,.22);color:#53637b}
+@supports not (backdrop-filter:blur(1px)){.card,.kpi,.rc{background:rgba(255,255,255,.94)}}
+@media(prefers-reduced-transparency:reduce){.card,.kpi,.rc,.settings,.detail{background:#fff;backdrop-filter:none;-webkit-backdrop-filter:none}.plan-scroll{background:#fff}}
+@media(prefers-reduced-motion:reduce){.kpi:hover{transform:none}.kpi{transition:none}}
+
+/* Manual-confirmation uses a neutral solid fill; metadata wraps below the scale. */
+:root{--ask:#606873;--ask-soft:#e3e5e8}.plan .room.st-ask{fill:var(--ask-soft)}
+.plan-meta{display:flex;flex-wrap:wrap;gap:5px 16px;padding:12px 2px 0;font:10px/1.8 var(--f-mono);color:var(--muted);min-width:0}.plan-meta>span{min-width:0;max-width:100%;overflow-wrap:anywhere;word-break:break-word}.plan-meta b{font:600 10px var(--f-body);margin-right:4px}.legend{gap:8px 14px;align-items:center;padding-top:10px;border-top:1px solid var(--line);margin-top:12px}.legend>span{display:inline-flex;align-items:center;gap:4px;line-height:1.8;max-width:100%;flex-wrap:wrap}
+
+.plan .door-symbol{color:#64748b}.plan .door-tile{fill:#fff;stroke:currentColor;stroke-width:1.1}.plan .door-frame{fill:none;stroke:currentColor;stroke-width:1;stroke-linejoin:round}.plan .door-knob{fill:currentColor;stroke:none}.plan .door-symbol.is-used{color:var(--sel)}.plan .is-used .door-tile{stroke-width:1.6;fill:#eef6ff}.plan .door-halo{fill:rgba(0,122,255,.12);stroke:rgba(0,122,255,.4);stroke-width:1}.plan .door-exit-label path{fill:none;stroke:var(--sel);stroke-width:1}.plan .door-exit-label rect{fill:var(--sel);stroke:white;stroke-width:.8}.plan .door-exit-label text{fill:white;font-size:9px;font-weight:700;stroke:none}
+
+.plan .architectural-door{color:#64748b}.plan .door-opening-gap{stroke:#fff;stroke-width:5;fill:none;stroke-linecap:butt}.plan .door-jamb{fill:none;stroke:currentColor;stroke-width:1.4}.plan .door-leaf{fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:square}.plan .door-swing{fill:none;stroke:currentColor;stroke-width:.9;opacity:.85}.plan .architectural-door.is-used{color:var(--sel)}.plan .is-used .door-leaf{stroke-width:2.2}.plan .is-used .door-swing{stroke-width:1.4;opacity:1}
 </style>
 
 <div class="wrap">
@@ -150,22 +175,10 @@ td.n, th.n { text-align: right; font-family: var(--f-mono); font-variant-numeric
     <div class="meta" id="meta"></div>
   </header>
 
-  <section class="card settings" aria-label="專案設定">
-    <h2>專案設定（由使用者確認，程式不從房間名稱推測）</h2>
-    <div class="fields">
-      <label for="useGroup">使用類組<select id="useGroup"></select></label>
-      <label for="floorNo">樓層數（第幾層）<input type="number" id="floorNo" min="-5" max="120" step="1"></label>
-      <label for="fireRes">防火構造或不燃材料<select id="fireRes"><option value="true">是</option><option value="false">否</option><option value="null">未確認</option></select></label>
-      <label for="tv" id="tvWrap">有現場觀眾之電視攝影場<select id="tv"><option value="null">未確認</option><option value="false">否</option><option value="true">是</option></select></label>
-      <label for="classroom" id="clsWrap">走廊供教室使用<select id="classroom"><option value="null">未確認</option><option value="false">否</option><option value="true">是</option></select></label>
-    </div>
-    <div class="actions">
-      <button id="run">執行檢討（建立新批次）</button>
-      <button class="ghost" id="lock">鎖定此批次</button>
-      <button class="ghost" id="importBtn">匯入模型快照（A 外掛匯出的 JSON）</button>
-      <input type="file" id="importFile" accept=".json,application/json" hidden>
-      <span class="dirty" id="dirty" hidden>設定已變更，目前畫面仍是上一批次的結果</span>
-    </div>
+  <section class="card settings" aria-label="本次檢討條件">
+    <div class="condition-head"><div><div class="eyebrow">REVIEW CONDITIONS</div><h2>本次檢討條件</h2></div><span class="readonly-tag">由 Revit 匯出 · 唯讀</span></div>
+    <div class="condition-grid" id="conditionSummary"></div>
+    <p class="condition-note">若需變更檢討條件或模型，請回 Revit 調整後重新產生快照。</p>
     <div class="toast" id="importMsg" role="status"></div>
   </section>
 
@@ -185,33 +198,11 @@ td.n, th.n { text-align: right; font-family: var(--f-mono); font-variant-numeric
       </div>
       <div class="layers" id="layers"></div>
       <div class="plan-scroll"><svg class="plan" id="plan" viewBox="-24 -40 700 330" role="img" aria-label="逃生動線平面"></svg></div>
+      <div class="plan-meta" id="planMeta" aria-label="圖面來源資訊"></div>
       <div class="legend" id="legend"></div>
     </section>
     <aside class="card detail" id="detail" aria-live="polite"></aside>
   </div>
-
-  <div class="grid2">
-    <section class="card">
-      <h2>走廊淨寬（§92）</h2>
-      <div class="tbl-wrap"><table>
-        <thead><tr><th>走廊</th><th class="n">淨寬</th><th class="n">需求</th><th>規則</th><th>結果</th></tr></thead>
-        <tbody id="corrBody"></tbody></table></div>
-    </section>
-    <section class="card">
-      <h2>模型修正清單（改好後回 Revit 重新擷取）</h2>
-      <div class="tbl-wrap"><table>
-        <thead><tr><th>ElementId</th><th>問題</th><th>來源</th><th></th></tr></thead>
-        <tbody id="fixBody"></tbody></table></div>
-      <div class="toast" id="toast" role="status"></div>
-    </section>
-  </div>
-
-  <section class="card">
-    <h2>檢討批次紀錄（新批次不覆寫舊結果）</h2>
-    <div class="tbl-wrap"><table>
-      <thead><tr><th>批次</th><th>建立時間</th><th>使用類組</th><th class="n">上限</th><th>符合／不符合／需確認／資料不足</th><th>快照</th><th>狀態</th></tr></thead>
-      <tbody id="batchBody"></tbody></table></div>
-  </section>
 
   <div class="foot">
     <p><span data-demo-note>平面、尺寸與 ElementId 都是示意資料。</span>步行距離：房內最遠點（外框內縮 0.5 m）直線到門、垂直接走廊中心線、沿中心線到樓梯計算終點；第一階段假設房內無固定障礙物。</p>
@@ -226,14 +217,13 @@ const PACK = /*PACK*/null;
 const SETTINGS0 = /*SETTINGS*/null;
 const BATCH0 = /*BATCH*/null;
 
-const GROUPS = ["A-1","A-2","B-1","B-2","B-3","B-4","C-1","C-2","D-1","D-2","D-3","D-4","D-5","E","F-1","F-2","F-3","F-4","G-1","G-2","G-3","H-1","H-2","I"];
 const ST = {
   "符合": { c: "s-ok", g: "✓", plan: "" },
   "不符合": { c: "s-bad", g: "✕", plan: "st-bad" },
   "需人工確認": { c: "s-ask", g: "?", plan: "st-ask" },
   "模型資料不足": { c: "s-gap", g: "!", plan: "st-gap" },
 };
-const LAYERS = [["rooms", "房間／牆"], ["doors", "門"], ["corr", "走廊"], ["stairs", "樓梯"], ["path", "逃生路徑"], ["alt", "替代出口路徑"], ["marks", "編號標記"], ["dims", "量測尺寸"]];
+const LAYERS = [["rooms", "房間／牆"], ["doors", "門"], ["corr", "走廊"], ["stairs", "樓梯"], ["path", "逃生路徑"], ["marks", "設計提示標記"], ["dims", "量測尺寸"]];
 const state = {
   batches: [BATCH0], cur: 0, sel: "523105", filter: null, view: "legal",
   layers: Object.fromEntries(LAYERS.map(([k]) => [k, k !== "dims"])),
@@ -250,38 +240,27 @@ const SNAP_OF = new WeakMap([[BATCH0, SNAPSHOT]]);
 const snap = () => SNAP_OF.get(batch()) || SNAPSHOT;
 const lvl = (b) => b.inputs.level || "樓層未命名";
 
-// ---------- 專案設定 ----------
-$("useGroup").innerHTML = `<option value="">— 請選擇 —</option>` + GROUPS.map((g) => `<option>${g}</option>`).join("");
-function readSettings() {
-  const tri = (v) => (v === "null" ? null : v === "true");
-  // 樓層數沒填就是 null（整合規則第 5 條），不能變成 0
-  const fl = $("floorNo").value.trim();
-  return { ...state.settings, use_group: $("useGroup").value || null, floor_number: fl === "" ? null : Number(fl),
-    fire_resistant: tri($("fireRes").value), tv_studio_with_audience: tri($("tv").value), corridor_serves_classroom: tri($("classroom").value) };
+// ---------- 唯讀檢討條件：只呈現目前批次實際使用的設定 ----------
+function renderSettings() {
+  const s = batch().inputs.settings;
+  const tri = (v) => v === true ? "是" : v === false ? "否" : "未確認";
+  const items = [
+    ["使用類組", s.use_group || "未確認"],
+    ["法定樓層數", s.floor_number == null ? "未確認" : "第 " + s.floor_number + " 層"],
+    ["防火構造或不燃材料", tri(s.fire_resistant)],
+  ];
+  if (["C-1", "C-2"].includes(s.use_group)) items.push(["有現場觀眾之電視攝影場", tri(s.tv_studio_with_audience)]);
+  if (["D-3", "D-4", "D-5"].includes(s.use_group)) items.push(["走廊供教室使用", tri(s.corridor_serves_classroom)]);
+  $("conditionSummary").innerHTML = items.map(([label, value]) =>
+    '<div class="condition-item"><span>' + esc(label) + '</span><strong class="' + (value === "未確認" ? "unknown" : "") + '">' + esc(value) + '</strong></div>').join("");
 }
-function writeSettings(s) {
-  $("useGroup").value = s.use_group || ""; $("floorNo").value = s.floor_number == null ? "" : s.floor_number;
-  $("fireRes").value = String(s.fire_resistant ?? null); $("tv").value = String(s.tv_studio_with_audience ?? null); $("classroom").value = String(s.corridor_serves_classroom ?? null);
-  syncSettingFields();
-}
-// 只比畫面上能改的欄位，缺欄位和 null 視為相同
-const EDIT_KEYS = ["use_group", "floor_number", "fire_resistant", "tv_studio_with_audience", "corridor_serves_classroom"];
-const sameSettings = (a, b) => EDIT_KEYS.every((k) => (a[k] ?? null) === (b[k] ?? null));
-function syncSettingFields() {
-  const g = $("useGroup").value;
-  $("tvWrap").hidden = !(g === "C-1" || g === "C-2");
-  $("clsWrap").hidden = !["D-3", "D-4", "D-5"].includes(g);
-  $("dirty").hidden = sameSettings(readSettings(), batch().inputs.settings);
-}
-["useGroup", "floorNo", "fireRes", "tv", "classroom"].forEach((id) => $(id).addEventListener("change", syncSettingFields));
 function addBatch(sp, s) {
   const b = EgressEngine.review(sp, s, PACK);
   SNAP_OF.set(b, sp);
   state.batches.push(b); state.cur = state.batches.length - 1; state.settings = s;
-  render(); syncSettingFields();
+  render();
   return b;
 }
-$("run").addEventListener("click", () => addBatch(snap(), readSettings()));
 
 // ---------- 匯入 A 的模型快照 ----------
 function snapshotProblems(s) {
@@ -291,38 +270,25 @@ function snapshotProblems(s) {
   for (const k of ["rooms", "doors", "stairs", "corridors", "warnings"]) if (!Array.isArray(s[k])) p.push(`缺少 ${k} 陣列`);
   return p;
 }
-$("importBtn").addEventListener("click", () => $("importFile").click());
-// 真實模型不沿用範例設定：使用類組、樓層數、防火構造都留空，由使用者選定後再按「執行檢討」
+// 保留既有 Revit 注入介面；未提供設定的欄位維持未知，不沿用範例條件。
 const BLANK_SETTINGS = { use_group: null, use_group_set_by: null, floor_number: null, below_ground: false, fire_resistant: null, tv_studio_with_audience: null, corridor_serves_classroom: null, duplex_housing: false };
 function importSnapshot(s, name, preset) {
   const bad = snapshotProblems(s);
   if (bad.length) throw new Error(bad.join("；"));
   state.sel = null;
   state.settings = { ...BLANK_SETTINGS, ...(preset || {}) };
-  writeSettings(state.settings);
   // 範例批次和真實模型無關，不留在批次紀錄裡
   state.batches = state.batches.filter((x) => x !== BATCH0);
   const tag = document.querySelector("[data-demo-tag]");
   if (tag) tag.textContent = "規則包未核定";
   const note = document.querySelector("[data-demo-note]");
   if (note) note.textContent = "";
-  const b = addBatch(s, readSettings());
+  const b = addBatch(s, state.settings);
   SNAPSHOT = s;
-  const scope = preset ? `已依 Revit 擷取時的設定計算：${preset.use_group}、第 ${preset.floor_number} 層、防火構造${preset.fire_resistant == null ? "未確認" : preset.fire_resistant ? "是" : "否"}。可在上方修改後重新執行。` : "請選使用類組、樓層數、防火構造，再按「執行檢討」。";
-  $("importMsg").textContent = `已載入 ${name}：${b.inputs.model}／${lvl(b)}，${s.rooms.length} 間房、${s.doors.length} 扇門、${s.stairs.length} 座樓梯、${s.corridors.length} 條走廊、${s.warnings.length} 筆擷取提醒。${scope}`;
+  $("importMsg").textContent = preset
+    ? "已載入 Revit 快照：" + b.inputs.model + "／" + lvl(b) + "，依擷取時的設定計算。"
+    : "此快照未提供檢討設定；未知條件維持未確認，請回 Revit 確認後重新輸出。";
 }
-$("importFile").addEventListener("change", async (e) => {
-  const f = e.target.files[0];
-  e.target.value = "";
-  if (!f) return;
-  try {
-    importSnapshot(JSON.parse((await f.text()).replace(/^﻿/, "")), f.name);
-  } catch (err) {
-    $("importMsg").textContent = `無法匯入 ${f.name}：${err.message}`;
-  }
-});
-$("lock").addEventListener("click", () => { batch().locked = true; render(); });
-
 // ---------- 畫面 ----------
 // 第 93 條只檢討居室：使用者標成非居室、通行的房間不列入卡片和統計（批次資料仍保留）
 function reviewed(b) {
@@ -341,8 +307,6 @@ function renderMeta() {
     ["模型", `${esc(i.model)}（Revit ${esc(snap().project.revit_version)}）`], ["樓層", esc(lvl(b))], ["擷取", esc(String(i.extracted_at || "—").replace("T", " ").slice(0, 16))],
     ["規則包", i.rule_pack], ["引擎", i.engine_version], ["批次", `<span class="mono">${b.batch_id}</span>${b.locked ? "（已鎖定）" : ""}`],
   ].map(([k, v]) => `<span>${k} <b>${v}</b></span>`).join("");
-  $("lock").disabled = b.locked;
-  $("lock").textContent = b.locked ? "此批次已鎖定" : "鎖定此批次";
 }
 function renderKpis() {
   const b = batch(), c = counts(b), n = reviewed(b).length;
@@ -374,7 +338,7 @@ function renderRooms() {
       ${r.reasons.length ? `<span class="x" style="color:var(--ask)">${esc(r.reasons[0])}</span>` : ""}
     </button>`;
   }).join("") || `<p class="muted">沒有符合篩選條件的居室。</p>`;
-  if (hidden) $("rooms").innerHTML += `<p class="muted" style="grid-column:1/-1">另有 ${hidden} 間房沒有封閉外框（未放置或未封閉），沒有列出卡片；問題列在下方「模型修正清單」。</p>`;
+  if (hidden) $("rooms").innerHTML += `<p class="muted" style="grid-column:1/-1">另有 ${hidden} 間房沒有封閉外框（未放置或未封閉），沒有列出卡片；請回 Revit 查看缺漏並重新產生快照。</p>`;
   if (others) $("rooms").innerHTML += `<p class="muted" style="grid-column:1/-1">另有 ${others} 間標成非居室或通行的房間（例如廁所、走廊）依第 93 條不列入檢討，平面圖上仍會顯示。</p>`;
   $("rooms").querySelectorAll(".rc").forEach((el) => el.addEventListener("click", () => { state.sel = el.dataset.id; render(); }));
 }
@@ -408,12 +372,19 @@ function renderPlan() {
     $("plan").setAttribute("viewBox", "0 0 700 120");
     $("plan").innerHTML = `<text class="val" x="350" y="60" text-anchor="middle">模型快照裡沒有可以畫的房間、門、樓梯或走廊座標</text>`;
     $("legend").innerHTML = "";
+    $("planMeta").textContent = "";
     return;
   }
   const { S, W, H } = F;
   // 寬度至少 688，窄長的平面置中，文字才不會被放大
   const vbW = Math.max(W + 48, 688);
-  $("plan").setAttribute("viewBox", `${-24 - (vbW - W - 48) / 2} -40 ${vbW} ${H + 80}`);
+  // 只呈現目前選取房間實際採用的樓梯；未選用或終點未確認者不加分析標記。
+  const analyzedStair = sel && sel.facts ? SP.stairs.find(st => st.element_id === sel.facts.stair_id) : null;
+  const stairItems = L.stairs && analyzedStair ? [{ st: analyzedStair, unresolved: false }] : [];
+  const stairColumns = Math.max(1, Math.floor((vbW - 48) / 154));
+  const stairRows = Math.ceil(stairItems.length / stairColumns);
+  const topMargin = Math.max(40, stairRows * 46 + 20);
+  $("plan").setAttribute("viewBox", [-24 - (vbW - W - 48) / 2, -topMargin, vbW, H + topMargin + 40].join(" "));
   // 資料是 Revit 座標（y 向上＝北），SVG 的 y 向下，所以畫之前要翻轉
   const X = (x) => (x - F.x0) * S, Y = (y) => (F.y1 - y) * S;
   const pt = (p) => `${X(p[0])},${Y(p[1])}`;
@@ -424,7 +395,6 @@ function renderPlan() {
   const rect = (r) => `x="${r.x0 * S}" y="${r.y0 * S}" width="${(r.x1 - r.x0) * S}" height="${(r.y1 - r.y0) * S}"`;
   let h = `<defs>
     <pattern id="p-bad" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect class="pat-bg-bad" width="7" height="7"/><line class="pat-ln-bad" x1="0" y1="0" x2="0" y2="7"/></pattern>
-    <pattern id="p-ask" width="8" height="8" patternUnits="userSpaceOnUse"><rect class="pat-bg-ask" width="8" height="8"/><circle class="pat-dot-ask" cx="4" cy="4" r="1.3"/></pattern>
     <pattern id="p-hint" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)"><rect class="pat-bg-hint" width="8" height="8"/><line class="pat-ln-hint" x1="0" y1="0" x2="0" y2="8"/></pattern>
   </defs>`;
   if (L.corr) for (const c of b.corridors) {
@@ -435,25 +405,7 @@ function renderPlan() {
     h += `<rect class="corr ${c.status === "不符合" ? "narrow" : ""}" ${rect(r)}/>`;
     if (L.dims) h += `<g class="dim"><text x="${(r.x0 + r.x1) / 2 * S}" y="${r.y1 * S - 3}" text-anchor="middle">淨寬 ${f1(w)}</text></g>`;
   }
-  // A 的外掛把梯段、平台分圈放在 footprint_loops，逐圈畫；終點未定的樓梯（unresolved_stairs）畫虛線
-  const drawStair = (st, unresolved) => {
-    const loops = (st.footprint_loops || []).filter((l) => Array.isArray(l) && l.length >= 3);
-    if (!loops.length && st.footprint && st.footprint.length) {
-      const r = bb(st.footprint);
-      h += `<rect class="stair" ${rect(r)}/>`;
-      for (let y = r.y0 + 1; y < r.y1; y++) h += `<line class="tread" x1="${r.x0 * S + 4}" x2="${r.x1 * S - 4}" y1="${y * S}" y2="${y * S}"/>`;
-    }
-    for (const l of loops) h += `<polygon class="stair ${unresolved ? "unresolved" : ""}" points="${l.map(pt).join(" ")}"/>`;
-    const all = loops.length ? loops.flat() : st.footprint || [];
-    if (!all.length) return;
-    const r = bb(all);
-    h += `<text class="lbl" x="${(r.x0 + r.x1) / 2 * S}" y="${r.y0 * S - 8}" text-anchor="middle" style="fill:var(--ok)">${esc(String(st.name || "").slice(-2))}${unresolved ? "（終點未定）" : ""}</text>`;
-    if (Array.isArray(st.entry_point)) h += `<circle class="entry" cx="${X(st.entry_point[0])}" cy="${Y(st.entry_point[1])}" r="4"/>`;
-  };
-  if (L.stairs) {
-    SP.stairs.forEach((st) => drawStair(st, false));
-    (SP.unresolved_stairs || []).forEach((st) => drawStair(st, true));
-  }
+  let roomLabels = "";
   if (L.rooms) for (const r of b.rooms) {
     const room = SP.rooms.find((x) => x.element_id === r.element_id);
     if (!room || !room.boundary || !room.boundary.length) continue;
@@ -461,23 +413,36 @@ function renderPlan() {
     const cls = state.view === "legal" ? ST[r.status].plan : (r.hints.length ? "st-hint" : "");
     h += `<polygon class="room ${cls} ${r.element_id === state.sel ? "sel" : ""}" data-id="${esc(r.element_id)}" tabindex="0" role="button" aria-label="${esc(r.name)} ${r.status}" points="${room.boundary.map(pt).join(" ")}"/>`;
     const cx = (q.x0 + q.x1) / 2 * S, cy = (q.y0 + q.y1) / 2 * S;
-    h += `<text class="lbl" x="${cx}" y="${cy - 2}" text-anchor="middle">${esc(room.number ?? "")} ${ST[r.status].g}</text>`;
-    h += `<text class="val" x="${cx}" y="${cy + 14}" text-anchor="middle">${r.facts ? f1(r.facts.distance_m) + " m" : "資料不足"}</text>`;
+    const available = Math.max(8, (q.x1 - q.x0) * S - 8);
+    const excluded = room.is_habitable === false;
+    const label = String(room.number ?? "") + (excluded ? "" : " " + ST[r.status].g);
+    const value = excluded ? "" : r.facts ? f1(r.facts.distance_m) + " m" : "資料不足";
+    const units = text => [...text].reduce((n, c) => n + (c.charCodeAt(0) > 255 ? 1 : .62), 0);
+    const labelSize = Math.min(12, available / Math.max(1, units(label)));
+    const valueSize = Math.min(10, available / Math.max(1, units(value)));
+    const lineGap = Math.min(14, Math.max(10, (q.y1 - q.y0) * S / 3));
+    roomLabels += '<g class="room-label" aria-hidden="true"><title>' + esc(room.name) + ' · ' + esc(room.number ?? "") + ' · ' + esc(excluded ? "非居室／通行空間，不列入居室檢討" : r.status + (r.facts ? ' · ' + f1(r.facts.distance_m) + ' m' : '')) + '</title>'
+      + '<text class="lbl" x="' + cx + '" y="' + (value ? cy - 2 : cy + 4) + '" text-anchor="middle" style="font-size:' + labelSize + 'px">' + esc(label) + '</text>'
+      + (value ? '<text class="val" x="' + cx + '" y="' + (cy + lineGap) + '" text-anchor="middle" style="font-size:' + valueSize + 'px">' + esc(value) + '</text>' : '') + '</g>';
   }
-  if (L.doors) for (const d of SP.doors) {
-    if (!Array.isArray(d.position)) continue;
-    const [x, y] = d.position;
-    h += `<line class="door ${d.clear_width_m == null ? "nodata" : ""}" x1="${X(x - .6)}" x2="${X(x + .6)}" y1="${Y(y)}" y2="${Y(y)}"/>`;
+  // A 的外掛把梯段、平台分圈放在 footprint_loops，逐圈畫；只呈現目前分析採用的樓梯
+  const drawStair = (st, unresolved) => {
+    const loops = (st.footprint_loops || []).filter((l) => Array.isArray(l) && l.length >= 3);
+    if (!loops.length && st.footprint && st.footprint.length) {
+      const r = bb(st.footprint);
+      h += `<rect class="stair ${unresolved ? "unresolved" : ""}" ${rect(r)}/>`;
+      for (let y = r.y0 + 1; y < r.y1; y++) h += `<line class="tread" x1="${r.x0 * S + 4}" x2="${r.x1 * S - 4}" y1="${y * S}" y2="${y * S}"/>`;
+    }
+    for (const l of loops) h += `<polygon class="stair ${unresolved ? "unresolved" : ""}" points="${l.map(pt).join(" ")}"/>`;
+    const all = loops.length ? loops.flat() : st.footprint || [];
+    if (!all.length) return;
+    const r = bb(all);
+    if (Array.isArray(st.entry_point)) h += `<circle class="entry" cx="${X(st.entry_point[0])}" cy="${Y(st.entry_point[1])}" r="4"/>`;
+  };
+  if (L.stairs) {
+    stairItems.forEach(({ st }) => drawStair(st, false));
   }
   if (sel && sel.facts) {
-    if (L.alt) for (const c of sel.facts.candidates.filter((c) => c.stair_id !== sel.facts.stair_id)) {
-      // B 有給每座樓梯的實際路線就照畫，沒有才用舊的水平走廊近似
-      if (Array.isArray(c.path) && c.path.length >= 2) { h += `<polyline class="alt" points="${c.path.map(pt).join(" ")}"/>`; continue; }
-      const st = SP.stairs.find((x) => x.element_id === c.stair_id);
-      if (!st || !st.entry_point || sel.facts.path.length < 3) continue;
-      const p =sel.facts.path.slice(0, 3).concat([[st.entry_point[0], sel.facts.path[2][1]], st.entry_point]);
-      h += `<polyline class="alt" points="${p.map(pt).join(" ")}"/>`;
-    }
     if (L.path) {
       const p = sel.facts.path;
       h += `<polyline class="path" points="${p.map(pt).join(" ")}"/>`;
@@ -488,33 +453,89 @@ function renderPlan() {
       h += `<g class="dim"><text x="${X((a[0] + d[0]) / 2) + 6}" y="${Y((a[1] + d[1]) / 2)}">室內 ${f1(sel.facts.indoor_m)}</text></g>`;
     }
   }
-  if (L.marks) {
-    let n = 0;
-    for (const r of b.rooms) {
-      const room = SP.rooms.find((x) => x.element_id === r.element_id);
-      if (r.status !== "符合" && room && room.boundary && room.boundary.length) {
-        n++; const q = bb(room.boundary), mx = (q.x0 + .9) * S, my = (q.y0 + .9) * S;
-        h += `<g class="mk"><circle cx="${mx}" cy="${my}" r="8"/><text x="${mx}" y="${my + 4}" text-anchor="middle">${n}</text></g>`;
+  // 原本問題流水號與房號重疊；狀態已在房號旁顯示，僅保留設計提示標記。
+  h += roomLabels;
+  if (L.marks && sel) sel.hints.filter(item => item.at).forEach((item, i) => {
+    h += '<g class="mk hint"><circle cx="' + X(item.at[0]) + '" cy="' + Y(item.at[1]) + '" r="8"/><text x="' + X(item.at[0]) + '" y="' + (Y(item.at[1]) + 4) + '" text-anchor="middle">' + String.fromCharCode(65 + i) + '</text></g>';
+  });
+  // 建築平面門符號：斷牆、門扇、四分之一開啟圓弧。
+  // 快照沒有鉸鏈與開啟方向；方向只按鄰近房間邊界排版，尺寸為固定圖示單位，不能作模型量測。
+  if (L.doors) {
+    const usedDoor = sel && sel.facts ? sel.facts.door_id : null;
+    const route = sel && sel.facts && Array.isArray(sel.facts.path) ? sel.facts.path : [];
+    // 僅作圖面篩選：開口中心距目前路線5cm內才顯示，非門窗分類或法規判定。
+    const onRoute = position => route.some((point, i) => {
+      if (!i) return false;
+      const a = route[i - 1], dx = point[0] - a[0], dy = point[1] - a[1], len2 = dx * dx + dy * dy;
+      const t = len2 > 0 ? Math.max(0, Math.min(1, ((position[0] - a[0]) * dx + (position[1] - a[1]) * dy) / len2)) : 0;
+      return Math.hypot(position[0] - a[0] - t * dx, position[1] - a[1] - t * dy) <= 0.05;
+    });
+    const orderedDoors = SP.doors.filter(d => Array.isArray(d.position) && d.position.length >= 2 && d.position.every(Number.isFinite))
+      .filter(d => route.length >= 2 && (d.element_id === usedDoor || onRoute(d.position)))
+      .slice().sort((a, b) => Number(a.element_id === usedDoor) - Number(b.element_id === usedDoor));
+    for (const d of orderedDoors) {
+      const used = d.element_id === usedDoor, x = X(d.position[0]), y = Y(d.position[1]);
+      const related = SP.rooms.filter(room => (d.room_ids || []).includes(room.element_id));
+      let nearest = null;
+      for (const room of related) for (let j = 0; j < (room.boundary || []).length; j++) {
+        const p = room.boundary[j], q = room.boundary[(j + 1) % room.boundary.length];
+        const ax = X(p[0]), ay = Y(p[1]), dx = X(q[0]) - ax, dy = Y(q[1]) - ay, len2 = dx * dx + dy * dy;
+        if (len2 < 1e-8) continue;
+        const t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / len2));
+        const distance2 = (x - ax - t * dx) ** 2 + (y - ay - t * dy) ** 2;
+        if (!nearest || distance2 < nearest.distance2) nearest = { dx, dy, distance2 };
       }
-      if (r.element_id === state.sel) r.hints.filter((x) => x.at).forEach((hh, i) => {
-        h += `<g class="mk hint"><circle cx="${X(hh.at[0])}" cy="${Y(hh.at[1])}" r="8"/><text x="${X(hh.at[0])}" y="${Y(hh.at[1]) + 4}" text-anchor="middle">${String.fromCharCode(65 + i)}</text></g>`;
-      });
+      const angle = nearest ? Math.atan2(nearest.dy, nearest.dx) * 180 / Math.PI : 0;
+      const preferredRoom = related.find(room => used && room.element_id === sel.element_id) || related.find(room => room.is_habitable === true) || related[0];
+      let side = 1;
+      if (nearest && preferredRoom && preferredRoom.boundary && preferredRoom.boundary.length) {
+        const center = preferredRoom.boundary.reduce((v, p) => [v[0] + X(p[0]), v[1] + Y(p[1])], [0, 0]).map(v => v / preferredRoom.boundary.length);
+        side = (center[0] - x) * nearest.dy - (center[1] - y) * nearest.dx >= 0 ? 1 : -1;
+      }
+      const description = (used ? '本次逃生路徑採用的出口' : '門開口') + ' · ElementId ' + d.element_id + ' · ' + (d.clear_width_m == null ? '淨寬未確認' : '淨寬 ' + f1(d.clear_width_m) + ' m');
+      h += '<g class="door-symbol architectural-door ' + (used ? 'is-used' : '') + '" data-door-id="' + esc(d.element_id) + '" role="img" aria-label="' + esc(description) + '" transform="translate(' + x + ',' + y + ')"><title>' + esc(description + '（開啟圓弧與尺寸僅示意，非模型門扇方向）') + '</title>'
+        + '<g transform="rotate(' + angle + ') scale(1,' + side + ')"><path class="door-opening-gap" d="M-6,0 H6"/>'
+        + '<path class="door-jamb" d="M-6,-2 V2 M6,-2 V2"/>'
+        + '<path class="door-leaf" d="M-6,0 V-12"/>'
+        + '<path class="door-swing" d="M6,0 A12,12 0 0 0 -6,-12"/></g>'
+        + (used ? '<g class="door-exit-label" transform="translate(12,12)"><path d="M-3,-3 L-9,-9"/><rect x="-3" y="-7" width="28" height="15" rx="4"/><text x="11" y="4" text-anchor="middle">出口</text></g>' : '') + '</g>';
     }
   }
+  // 樓梯的幾何先畫在房間上方；標示列最後畫，避免被房間遮住或彼此重疊。
+  if (L.stairs) stairItems.forEach(({ st, unresolved }, i) => {
+    const points = (st.footprint_loops || []).flat().concat(st.footprint || []);
+    const entry = Array.isArray(st.entry_point) && st.entry_point.length >= 2 && st.entry_point.every(Number.isFinite) ? st.entry_point : null;
+    if (!entry && !points.length) return;
+    const bounds = points.length ? bb(points) : null;
+    const ax = entry ? X(entry[0]) : (bounds.x0 + bounds.x1) / 2 * S;
+    const ay = entry ? Y(entry[1]) : (bounds.y0 + bounds.y1) / 2 * S;
+    const col = i % stairColumns, row = Math.floor(i / stairColumns);
+    const count = Math.min(stairColumns, stairItems.length - row * stairColumns);
+    const lx = W / 2 + (col - (count - 1) / 2) * 154, ly = -topMargin + 24 + row * 46;
+    const caption = unresolved ? "終點未定 · 位置示意" : st.endpoint_type === "fire_door" ? "入口 · 安全梯防火門" : "入口 · 第一階";
+    const name = '分析採用樓梯';
+    h += '<g class="stair-marker ' + (unresolved ? 'unresolved' : '') + '" role="img" aria-label="' + esc(name + '，' + caption) + '"><title>' + esc(String(st.name || '樓梯') + ' · ElementId ' + st.element_id + ' · ' + caption) + '</title>'
+      + '<path class="stair-leader" d="M' + ax + ',' + ay + ' L' + ax + ',' + (ly + 19) + ' L' + lx + ',' + (ly + 19) + '"/><circle class="stair-anchor" cx="' + ax + '" cy="' + ay + '" r="4"/>'
+      + '<g transform="translate(' + lx + ',' + ly + ')"><rect class="stair-label-bg" x="-72" y="-17" width="144" height="36" rx="5"/>'
+      + '<path class="stair-icon" d="M-62,5 h5 v-5 h5 v-5 h5 v-5 h5"/>'
+      + '<text class="stair-label-name" x="-34" y="-3">' + esc(name) + '</text><text class="stair-label-note" x="-34" y="11">' + esc(caption) + '</text></g></g>';
+  });
   // 比例尺、北向、圖面資訊
   const sl = niceLen(F.w) * S, by = H + 24;
   h += `<g class="dim"><line x1="0" x2="${sl}" y1="${by}" y2="${by}" style="stroke-width:2"/><line x1="0" x2="0" y1="${by - 4}" y2="${by + 4}"/><line x1="${sl}" x2="${sl}" y1="${by - 4}" y2="${by + 4}"/><text x="${sl + 6}" y="${by + 4}">${niceLen(F.w)} m</text></g>
     <g transform="translate(${W + 8},-10)"><path d="M0,-14 L6,6 L0,2 L-6,6 z" style="fill:var(--ink)"/><text x="0" y="20" text-anchor="middle" class="val" style="fill:var(--ink)">N</text></g>
-    <g class="titleblock"><text x="${W}" y="${by + 4}" text-anchor="end">${esc(lvl(b))} ・ ${esc(b.inputs.model)} ・ ${esc(b.inputs.rule_pack)} ・ ${b.batch_id} ・ ${b.created_at.slice(0, 10)}</text></g>`;
+    `;
   $("plan").innerHTML = h;
+  $("planMeta").innerHTML = [["樓層", lvl(b)], ["模型", b.inputs.model], ["規則包", b.inputs.rule_pack], ["批次", b.batch_id], ["日期", b.created_at.slice(0, 10)]].map(([label, value]) => '<span><b>' + esc(label) + '</b> ' + esc(value) + '</span>').join("");
   $("plan").querySelectorAll(".room").forEach((el) => {
     const go = () => { state.sel = el.dataset.id; render(); };
     el.addEventListener("click", go);
     el.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } });
   });
   $("legend").innerHTML = state.view === "legal"
-    ? `<span><i class="sw" style="background:var(--room)"></i>✓ 符合</span><span><i class="sw" style="background:var(--bad-soft);border-color:var(--bad)"></i>✕ 不符合（斜線）</span><span><i class="sw" style="background:var(--ask-soft);border-color:var(--ask)"></i>? 需人工確認（點）</span><span><i class="sw" style="background:var(--gap-soft);border-style:dashed"></i>! 模型資料不足（虛框）</span><span><i class="sw" style="background:var(--sel)"></i>最遠點與步行路徑</span><span>灰點線＝替代出口</span>`
+    ? `<span><i class="sw" style="background:var(--room)"></i>✓ 符合</span><span><i class="sw" style="background:var(--bad-soft);border-color:var(--bad)"></i>✕ 不符合（斜線）</span><span><i class="sw" style="background:var(--ask-soft);border-color:var(--ask)"></i>? 需人工確認（灰色）</span><span><i class="sw" style="background:var(--gap-soft);border-style:dashed"></i>! 模型資料不足（虛框）</span><span><i class="sw" style="background:var(--sel)"></i>最遠點與步行路徑</span>`
     : `<span><i class="sw" style="background:var(--hint-soft);border-color:var(--hint)"></i>◆ 有設計提示（專案保守值，非法定）</span><span>A、B… 為急轉彎提示位置</span>`;
+  if (L.doors) $("legend").innerHTML += '<span><svg width="21" height="19" viewBox="-8 -14 18 17" aria-hidden="true"><path d="M-6,0 V-12 M6,0 A12,12 0 0 0 -6,-12" fill="none" stroke="#64748b" stroke-width="1.2"/></svg>門開口（圓弧方向／尺寸僅示意）</span><span style="color:var(--sel)">藍色門扇＝本次採用出口</span>';
 }
 
 function issuePayload(r) {
@@ -557,35 +578,17 @@ function renderDetail() {
   $("rvStatus").addEventListener("change", save); $("rvNote").addEventListener("input", save);
   const btn = $("mkIssue"); if (btn && !btn.disabled) btn.addEventListener("click", () => { state.issues.push(issuePayload(r)); renderDetail(); });
 }
-function renderTables() {
-  const b = batch();
-  $("corrBody").innerHTML = b.corridors.map((c) => `<tr><td>${esc(c.name)}<div class="muted mono" style="font-size:.72rem">${c.element_id}</div></td>
-    <td class="n">${f1(c.clear_width_m)}</td><td class="n">${f1(c.required_m)}</td><td>${c.rule ? ruleById[c.rule].article : "—"}</td><td>${badge(c.status)}${c.reasons.map((x) => `<div class="muted" style="font-size:.72rem">${esc(x)}</div>`).join("")}</td></tr>`).join("");
-  $("fixBody").innerHTML = b.fix_list.map((f) => `<tr><td class="mono">${f.element_id == null ? "—" : esc(f.element_id)}</td><td>${esc(f.issue)}</td><td>${f.source}</td>
-    <td>${f.element_id == null ? "" : `<button class="ghost sel-btn" data-id="${esc(f.element_id)}" style="padding:3px 8px;font-size:.78rem">在 Revit 選取</button>`}</td></tr>`).join("") || `<tr><td colspan="4" class="muted">沒有需要修正的項目。</td></tr>`;
-  document.querySelectorAll(".sel-btn").forEach((el) => el.addEventListener("click", () => {
-    $("toast").textContent = `原型未連接 Revit：正式版會請外掛選取 ElementId ${el.dataset.id} 並切到該視圖。`;
-  }));
-  $("batchBody").innerHTML = state.batches.map((x, i) => {
-    const c = counts(x), lim = x.rooms.find((r) => r.legal);
-    return `<tr style="cursor:pointer;${i === state.cur ? "box-shadow:inset 3px 0 0 var(--sel)" : ""}" data-i="${i}"><td class="mono">${x.batch_id}</td><td class="mono">${x.created_at.replace("T", " ").slice(0, 19)}</td>
-      <td>${esc(x.inputs.settings.use_group || "未選")}${x.inputs.settings.fire_resistant === false ? "・非防火" : ""}・${x.inputs.settings.floor_number == null ? "樓層數未填" : x.inputs.settings.floor_number + "F"}</td><td class="n">${lim ? lim.legal.limit_m : "—"}</td>
-      <td class="mono">${c["符合"]}／${c["不符合"]}／${c["需人工確認"]}／${c["模型資料不足"]}</td><td class="mono">${x.inputs.snapshot_hash}</td><td>${x.locked ? "已鎖定" : "草稿"}</td></tr>`;
-  }).join("");
-  document.querySelectorAll("#batchBody tr").forEach((tr) => tr.addEventListener("click", () => { state.cur = Number(tr.dataset.i); writeSettings(batch().inputs.settings); render(); }));
-}
 function render() {
   // 換了模型快照，原本選的房間可能不存在，改選第一間
   const rs = reviewed(batch()).filter(placed);
   if (!rs.some((r) => r.element_id === state.sel)) state.sel = rs.length ? rs[0].element_id : null;
   $("roomsTitle").textContent = `${lvl(batch())} 居室 ・ 點卡片查看詳細檢討`;
-  renderMeta(); renderKpis(); renderRooms(); renderPlan(); renderDetail(); renderTables();
+  renderMeta(); renderKpis(); renderRooms(); renderPlan(); renderDetail(); renderSettings();
   $("viewLegal").setAttribute("aria-pressed", state.view === "legal"); $("viewHint").setAttribute("aria-pressed", state.view === "hint");
 }
 $("viewLegal").addEventListener("click", () => { state.view = "legal"; render(); });
 $("viewHint").addEventListener("click", () => { state.view = "hint"; render(); });
 
-writeSettings(SETTINGS0);
 renderLayers();
 render();
 // A 外掛擷取後產生的網頁會把快照放在這裡，打開就載入；直接開網頁時是 null，顯示範例

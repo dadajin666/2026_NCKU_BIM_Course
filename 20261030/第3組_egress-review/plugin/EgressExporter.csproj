@@ -3,6 +3,7 @@
     <RevitVersion Condition="'$(RevitVersion)' == ''">2027</RevitVersion>
     <TargetFramework Condition="'$(RevitVersion)' == '2027'">net10.0-windows</TargetFramework>
     <TargetFramework Condition="'$(RevitVersion)' == '2024'">net48</TargetFramework>
+    <TargetFramework Condition="'$(RevitVersion)' == '2025' or '$(RevitVersion)' == '2026'">net8.0-windows</TargetFramework>
     <RevitDirectory Condition="'$(RevitDirectory)' == ''">C:\Program Files\Autodesk\Revit $(RevitVersion)</RevitDirectory>
     <UseWindowsForms>true</UseWindowsForms>
     <UseWPF>true</UseWPF>
@@ -22,7 +23,7 @@
     <Reference Include="System.Runtime.Serialization" Condition="'$(RevitVersion)' == '2024'" />
   </ItemGroup>
   <Target Name="ValidateRevit" BeforeTargets="ResolveReferences">
-    <Error Condition="'$(RevitVersion)' != '2027' and '$(RevitVersion)' != '2024'" Text="Supported RevitVersion: 2027 or 2024." />
+    <Error Condition="'$(RevitVersion)' != '2024' and '$(RevitVersion)' != '2025' and '$(RevitVersion)' != '2026' and '$(RevitVersion)' != '2027'" Text="Supported RevitVersion: 2024, 2025, 2026 or 2027." />
     <Error Condition="!Exists('../egress-review-standalone.html')" Text="Run: node build.js (in the project folder) to create egress-review-standalone.html first." />
     <Error Condition="!Exists('$(RevitDirectory)/RevitAPI.dll')" Text="Install Revit $(RevitVersion) or set RevitDirectory to its API assembly directory." />
   </Target>

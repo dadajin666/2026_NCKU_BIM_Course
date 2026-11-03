@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('2027','2024')][string]$RevitVersion = '2027',
+    [ValidateSet('2024','2025','2026','2027')][string]$RevitVersion = '2027',
     [string]$Dotnet = 'dotnet',
     [string]$RevitDirectory = "C:\Program Files\Autodesk\Revit $RevitVersion"
 )

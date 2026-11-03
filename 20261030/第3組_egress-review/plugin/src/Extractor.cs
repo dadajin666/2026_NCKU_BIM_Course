@@ -90,6 +90,9 @@ namespace Group3.EgressExporter
                 .Where(e => MainModel(e) && Exists(e))) Safe(door, () => ReadDoor(door));
             foreach (var stair in All<Stairs>().Where(e => MainModel(e) && Exists(e)))
                 Safe(stair, () => ReadStair(stair));
+            foreach (var legacy in new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Stairs).WhereElementIsNotElementType()
+                .Where(e => !(e is Stairs) && MainModel(e) && Exists(e) && StairKind.CrossesLevel(e, level)).OrderBy(e => e.Id.Value).ToList())
+                Safe(legacy, () => ReadLegacyStair(legacy));
             KeepOnlySelectedStairs();
             foreach (var stair in result.stairs.Where(s => s.entry_point == null).ToList()) {
                 result.stairs.Remove(stair); result.unresolved_stairs.Add(stair);
@@ -98,9 +101,6 @@ namespace Group3.EgressExporter
                 Warn(doc.GetElement(r.unique_id), "ROOM_NO_DOOR", "沒有找到與此房間關聯的門。", "error");
             foreach (var multi in All<MultistoryStairs>())
                 Warn(multi, "MULTISTORY_STAIRS_REVIEW", "多層樓梯的重複實例尚未完整展開；請逐樓層核對樓梯數量與終點。", "error");
-            foreach (var legacy in new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_Stairs)
-                .WhereElementIsNotElementType().Where(e => !(e is Stairs)))
-                Warn(legacy, "STAIR_UNSUPPORTED_TYPE", "非元件式樓梯尚未支援；保留元件編號供人工修正。", "error");
             foreach (var corridor in settings.corridors) ReadCorridor(corridor);
             ReadColumns();
             foreach (var link in All<RevitLinkInstance>())
@@ -239,13 +239,19 @@ namespace Group3.EgressExporter
                 data.position = XY(candidate);
                 // 插入點落在主體牆上就是這扇門的門洞；只有對不上時才需要人看
                 if (!OnHostWall(door, candidate))
-                    Warn(door, "DOOR_INSERTION_POINT", "族群插入點不在主體牆上；需確認它位在實際可通行門口，或用「設定門位置」修正。");
+                    Warn(door, "DOOR_INSERTION_POINT", "族群插入點不在主體牆上；請確認門的位置，路線會從這個點進出。");
+            }
+            // 沒有插入點的門（例如帷幕牆上的門）用外框中心當位置，並提醒是近似值
+            else if (candidate != null)
+            {
+                data.position = XY(candidate);
+                Warn(door, "DOOR_POSITION_APPROX", "這扇門沒有插入點（例如帷幕牆上的門），位置用外框中心近似；距離可能有些微誤差。");
             }
             if (data.position == null)
             {
                 data.position_confirmed = false;
                 result.unresolved_doors.Add(data);
-                Warn(door, "DOOR_POSITION_UNCONFIRMED", "門已擷取但位置待確認；請在本樓層使用「設定門位置」。候選點不會加入計算路網。", "error");
+                Warn(door, "DOOR_POSITION_UNCONFIRMED", "門已擷取但讀不到位置，不列入計算；請確認這扇門有幾何。", "error");
                 return;
             }
             result.doors.Add(data);
@@ -261,6 +267,39 @@ namespace Group3.EgressExporter
             var curve = location.Curve;
             var hit = curve.Project(new XYZ(point.X, point.Y, curve.GetEndPoint(0).Z));
             return hit != null && hit.Distance <= wall.Width / 2 + UnitUtils.ConvertToInternalUnits(0.001, UnitTypeId.Meters);
+        }
+        // 非元件式樓梯（舊式草圖樓梯、樓梯族群）讀不到梯段，只能用使用者點的位置或選的防火門（都在「選擇直通梯」設定）；外框用包圍框，只供畫面顯示
+        void ReadLegacyStair(Element stair)
+        {
+            var box = RevitPositions.BoxCorners(stair);
+            double x0 = M(box.Min(p => p.X)), x1 = M(box.Max(p => p.X)), y0 = M(box.Min(p => p.Y)), y1 = M(box.Max(p => p.Y));
+            var data = new StairData { element_id = Id(stair), unique_id = stair.UniqueId, name = stair.Name,
+                footprint = new List<double[]> { new[] { x0, y0 }, new[] { x1, y0 }, new[] { x1, y1 }, new[] { x0, y1 } } };
+            data.footprint_loops.Add(data.footprint);
+            result.stairs.Add(data);
+            var mapping = settings.stairs.SingleOrDefault(x => x.unique_id == stair.UniqueId);
+            data.is_direct_stair = mapping?.is_direct_stair;
+            if (mapping?.picked_point != null)
+            {
+                try
+                {
+                    RevitPositions.Validate(stair, level, mapping.picked_point, true);
+                    data.entry_point = mapping.picked_point.point_m.Take(2).ToArray(); data.endpoint_type = mapping.endpoint_type ?? "first_step";
+                    data.endpoint_source = mapping.picked_point.source;
+                }
+                catch (Exception ex) { Warn(stair, "STAIR_ENDPOINT_STALE", ex.Message, "error"); }
+            }
+            else if (mapping?.endpoint_type == "fire_door" && !string.IsNullOrWhiteSpace(mapping.endpoint_unique_id))
+            {
+                var door = doc.GetElement(mapping.endpoint_unique_id) as FamilyInstance;
+                if (door == null || !MainModel(door) || !Exists(door) || !(door.Location is LocationPoint lp))
+                    Warn(stair, "STAIR_ENDPOINT_STALE", "安全梯的防火門已移除或不在本階段；請按「選擇直通梯」重新選。", "error");
+                else { data.entry_point = XY(lp.Point); data.endpoint_type = "fire_door"; data.endpoint_source = "user_confirmed:" + door.UniqueId; }
+            }
+            if (data.entry_point == null && mapping?.is_direct_stair != false)
+                Warn(stair, "STAIR_ENDPOINT_UNCONFIRMED", "非元件式樓梯（舊式草圖樓梯或樓梯族群），外掛偵測不到第一階；請按「選擇直通梯」點選這座樓梯，再點第一階。", "error");
+            else if (data.entry_point != null && !data.is_direct_stair.HasValue)
+                Warn(stair, "STAIR_DIRECT_UNCONFIRMED", "還沒確認是否為直通樓梯；仍列入計算候選，但結果會標需人工確認。請按「選擇直通梯」。");
         }
         void ReadStair(Stairs stair)
         {
@@ -329,8 +368,8 @@ namespace Group3.EgressExporter
             if (data.entry_point == null) {
                 data.is_direct_stair = data.is_direct_stair == false ? (bool?)false : null;
                 Warn(stair, "STAIR_ENDPOINT_UNCONFIRMED", hasManualEndpoint ?
-                    "人工樓梯終點無效，請重新設定；不會改用自動端點並沿用舊確認。" :
-                    "偵測不到本層的第一階；請用「手動指定樓梯終點」。不會拿樓梯中心點代替。", "error");
+                    "人工樓梯終點無效，請按「選擇直通梯」重新設定；不會改用自動端點並沿用舊確認。" :
+                    "偵測不到本層的第一階；請按「選擇直通梯」點選這座樓梯，再點第一階。不會拿樓梯中心點代替。", "error");
             }
             if (!data.is_direct_stair.HasValue) Warn(stair, "STAIR_DIRECT_UNCONFIRMED", "還沒選定是否使用這座樓梯；仍列入計算候選，但結果會標需人工確認。請按「選擇直通梯」。");
         }

@@ -38,6 +38,7 @@
   }
 
   const EPS = 1e-6;
+  const SIDE = 1e-4; // 判斷貼邊線段兩側是否為空地時往外看的距離（0.1 mm），數值容差，不是法規數字
   const SNAP = 0.05; // 中心線端點相距 5 cm 內視為接在一起（模型繪製容差，自訂假設，不是法規數字）
 
   // 點 p 在線段 ab 上最近的點
@@ -102,7 +103,11 @@
   function walkNetwork(corridors, spaces, doors, stairs, obstacles) {
     const ends = [
       ...doors.map((d) => ({ p: d.position, sps: spaces.filter((s) => (d.room_ids || []).includes(s.element_id)) })),
-      ...stairs.map((st) => ({ p: st.entry_point, sps: spaces.filter((s) => inPoly(st.entry_point, s.boundary) >= 0) })),
+      // 樓梯終點在空間裡就直接用；不在任何空間裡（例如防火門的插入點在牆裡），才和門一樣接到旁邊空間的外框
+      ...stairs.map((st) => {
+        const inside = spaces.filter((s) => inPoly(st.entry_point, s.boundary) >= 0);
+        return { p: st.entry_point, sps: inside.length ? inside : spaces.filter((s) => gateOn(st.entry_point, s.boundary)) };
+      }),
     ];
     const viaCorridor = ends.filter((e) => !e.sps.length);
     const net = corridorNetwork(corridors, viaCorridor.map((e) => e.p), spaces.map((s) => s.boundary));
@@ -117,11 +122,11 @@
     const gates = [];
     for (const s of spaces) {
       s.boundary.forEach(net.nodeOf);
-      obstacles.flat().filter((p) => inPoly(p, s.boundary) >= 0).forEach(net.nodeOf);
+      turnPoints(s.boundary, obstacles).forEach(net.nodeOf);
       // 門的座標常在牆心、落在房間外框外：門先走到這個空間外框上最近的點，再進空間
-      doors.forEach((d, i) => {
-        if (!(d.room_ids || []).includes(s.element_id) || node[i] == null) return;
-        const g = gateOn(d.position, s.boundary);
+      ends.forEach((e, i) => {
+        if (!e.sps.includes(s) || node[i] == null) return;
+        const g = gateOn(e.p, s.boundary);
         if (!g) return;
         let k = net.nodeOf(g);
         if (inPoly(net.nodes[k], s.boundary) < 0) { net.nodes.push(g); k = net.nodes.length - 1; }
@@ -241,10 +246,26 @@
       const m = (ts[i] + ts[i - 1]) / 2, mp = [a[0] + m * (b[0] - a[0]), a[1] + m * (b[1] - a[1])];
       const inRoom = inPoly(mp, room), inObs = obstacles.map((o) => inPoly(mp, o));
       if (inRoom < 0 || inObs.some((v) => v > 0)) return false;
-      // 同時貼著兩個邊界（柱子貼牆、兩根柱子相貼）＝寬度 0 的縫，不能走
-      if ((inRoom === 0) + inObs.filter((v) => v === 0).length >= 2) return false;
+      // 同時貼著兩個邊界時，往線的兩側各看一點點：有一側是房內空地（例如柱子埋在牆角、柱面就是房間的邊）就能走；
+      // 兩側都不是空地（柱子貼牆、兩根柱子相貼的 0 寬縫）才擋住
+      if ((inRoom === 0) + inObs.filter((v) => v === 0).length >= 2) {
+        const L2 = Math.hypot(b[0] - a[0], b[1] - a[1]), nx = -(b[1] - a[1]) / L2 * SIDE, ny = (b[0] - a[0]) / L2 * SIDE;
+        const free = (q) => inPoly(q, room) > 0 && !obstacles.some((o) => inPoly(q, o) >= 0);
+        if (!free([mp[0] + nx, mp[1] + ny]) && !free([mp[0] - nx, mp[1] - ny])) return false;
+      }
     }
     return true;
+  }
+
+  // 繞障礙物時可以轉彎的點：落在空間裡的障礙物角點，加上障礙物邊和空間外框的交點。
+  // 柱子常一半埋在牆裡，角點在空間外；只用角點的話，貼牆的柱子旁邊沒有轉彎點，路線會繞遠路
+  function turnPoints(poly, obstacles) {
+    const out = obstacles.flat().filter((p) => inPoly(p, poly) >= 0);
+    for (const o of obstacles) o.forEach((a, i) => {
+      const b = o[(i + 1) % o.length];
+      poly.forEach((c, k) => { const x = segCross(a, b, c, poly[(k + 1) % poly.length]); if (x) out.push(x); });
+    });
+    return out;
   }
 
   // 可見性圖：任兩點之間能直接走就連一條邊
@@ -261,7 +282,7 @@
   // 房內路徑：最遠點走到門的最短路線，繞過凹角和柱子（可見性圖＋Dijkstra）；走不到回傳 null
   // 路線可以貼著牆角、柱角轉彎，不另外留淨空
   function indoorPath(from, door, room, obstacles) {
-    const nodes = [from, door, ...room, ...obstacles.flat()];
+    const nodes = [from, door, ...room, ...turnPoints(room, obstacles)];
     return netPath({ nodes, adj: visibility(nodes, room, obstacles) }, 0, 1);
   }
 
@@ -269,7 +290,7 @@
   // exitCost[i] 是從第 i 扇門出去、走到最近樓梯的走廊段長度
   // 房內任一點的距離 ＝ 看得到的節點中，min(直線距離 ＋ 該節點走到樓梯的距離)；最大值一定在外框上，所以只找外框
   function farthestPoint(room, obstacles, doorPts, exitCost) {
-    const nodes = [...doorPts, ...room, ...obstacles.flat()];
+    const nodes = [...doorPts, ...room, ...turnPoints(room, obstacles)];
     const D = distAll(visibility(nodes, room, obstacles), nodes.map((_, i) => (i < doorPts.length ? exitCost[i] : Infinity)));
     const ok = (p) => inPoly(p, room) > 0 && !obstacles.some((o) => inPoly(p, o) >= 0);
     const f = (p) => nodes.reduce((m, v, i) => (D[i] < Infinity && canWalk(p, v, room, obstacles) ? Math.min(m, dist(p, v) + D[i]) : m), Infinity);
