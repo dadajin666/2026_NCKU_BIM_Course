@@ -18,8 +18,8 @@ for (const room of snapshot.rooms.filter((r) => r.is_habitable === true)) {
     results.push({ element_id: room.element_id, name: room.name, missing: facts.missing });
     continue;
   }
-  assert.equal(facts.route_clearance_m, 0.5);
-  assert.equal(facts.geometry_version, '0.3.0-clearance');
+  assert.equal(facts.route_clearance_m, 0.45);
+  assert.equal(facts.geometry_version, '0.3.2-clearance');
   assert.ok(Number.isFinite(facts.distance_exact_m));
   assert.ok(Math.abs(facts.distance_exact_m - G.plen(facts.path)) < 1e-8);
   assert.deepEqual(facts.path[0], facts.far_point);
@@ -42,8 +42,8 @@ for (const r of results.filter((r) => r.missing)) {
 }
 const computed = results.filter((r) => !r.missing);
 const summary = { snapshot_sha256: crypto.createHash('sha256').update(bytes).digest('hex'),
-  model: snapshot.project.model_name, level: snapshot.project.level.name, geometry_version: '0.3.0-clearance',
-  route_clearance_m: 0.5, habitable_rooms: results.length, computed: computed.length,
+  model: snapshot.project.model_name, level: snapshot.project.level.name, geometry_version: '0.3.2-clearance',
+  route_clearance_m: 0.45, habitable_rooms: results.length, computed: computed.length,
   missing: results.length - computed.length, min_distance_m: computed.length ? Math.min(...computed.map((r) => r.distance_exact_m)) : null,
   max_distance_m: computed.length ? Math.max(...computed.map((r) => r.distance_exact_m)) : null,
   rooms: results.map(({ facts, ...r }) => r),

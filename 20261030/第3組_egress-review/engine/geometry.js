@@ -5,8 +5,8 @@
   const plen = (pts) => pts.slice(1).reduce((s, p, i) => s + dist(pts[i], p), 0);
   const r2 = (n) => Math.round(n * 100) / 100;
 
-  const CLEARANCE = 0.5; // 整段行走路線離牆／固定障礙物至少 0.5 m（專案設定，不是法規數字）
-  const GEOMETRY_VERSION = "0.3.0-clearance";
+  const CLEARANCE = 0.45; // 整段行走路線離牆／固定障礙物至少 0.45 m（使用者指定的專案設定，不是法規數字）
+  const GEOMETRY_VERSION = "0.3.2-clearance";
   const STEP = 0.25; // 沿內縮外框每 0.25 m 取一個候選點，再在可能更遠的區間細找
 
   // 外框每條邊往房內平移 d，相鄰兩條平移線的交點就是內縮後的角點（凹角、斜牆都適用，不管點的順序）
@@ -139,7 +139,7 @@
       (net.adj[v] = net.adj[v] || []).push([u, w]);
     };
     const portals = [];
-    // 房間兩側各有 0.5 m 接入點；只有指定門／樓梯能透過短接入段穿越邊界。
+    // 房間兩側各有 CLEARANCE 接入點；只有指定門／樓梯能透過短接入段穿越邊界。
     for (const s of spaces) {
       routeRegion(s.boundary, obstacles).nodes.forEach(nodeOf);
       ends.forEach((e, i) => {
@@ -171,6 +171,7 @@
 
   // 門的座標在牆裡時，取房間外框上最近的點當進出口；已在房內或邊上就用原座標。太遠回傳 null（不是這間房的門）
   const DOOR_WALL_MAX = 0.6; // 牆心到牆面的容許距離，自訂假設，不是法規數字
+  const HOST_ANGLE = Math.sin(0.1 * Math.PI / 180), HOST_OFFSET = 0.005; // 宿主牆分段容差：0.1°、5 mm，不放寬路線淨距
   function gateOn(p, poly) {
     if (inPoly(p, poly) >= 0) return p;
     let q = null;
@@ -304,7 +305,7 @@
   }
 
   // 內縮外框、外擴障礙物提供轉彎候選。凹多邊形內縮可能自交或消失，
-  // 所以它們只提供候選；每個點和線段仍回到原始幾何驗證 0.5 m，絕不靠錯誤外框放行。
+  // 所以它們只提供候選；每個點和線段仍回到原始幾何驗證 CLEARANCE，絕不靠錯誤外框放行。
   // 轉角採平移邊的交點（保守的折線），不以圓弧近似最短路徑。
   function routeRegion(room, obstacles) {
     const contours = [insetPolygon(room, CLEARANCE), ...obstacles.map((o) => insetPolygon(o, -CLEARANCE))];
@@ -330,10 +331,18 @@
     return sides.filter((s) => s.distance <= nearest + EPS).map((s) => {
       const anchor = [s.q[0] + s.n[0] * CLEARANCE, s.q[1] + s.n[1] * CLEARANCE];
       if (!clearPoint(anchor, room, obstacles) || !inFreeSpace(s.q, anchor, room, obstacles) || !awayFrom(p, anchor, obstacles)) return null;
-      // 分成數段的同一面直牆一併當作宿主邊。
-      const host = (t) => Math.abs((t.b[0] - t.a[0]) * s.n[0] + (t.b[1] - t.a[1]) * s.n[1]) < EPS * t.L &&
-        dist(t.a, closestOnLine(t.a, s.a, s.b)) < EPS;
-      if (sides.some((t) => !host(t) && segmentDistance(p, anchor, t.a, t.b) < CLEARANCE - EPS)) return null;
+      // Revit 同一面牆的相鄰邊段可能有微小角度差。只將連續、近共線的邊段併入宿主，
+      // 不把遠處平行牆或真正轉角當成門洞；anchor 與後續整段路線仍須完整保留 CLEARANCE。
+      const sameWall = (t) => Math.abs((t.b[0] - t.a[0]) * s.n[0] + (t.b[1] - t.a[1]) * s.n[1]) <= HOST_ANGLE * t.L &&
+        (t.b[0] - t.a[0]) * (s.b[0] - s.a[0]) + (t.b[1] - t.a[1]) * (s.b[1] - s.a[1]) > 0 &&
+        [t.a, t.b].every((v) => dist(v, closestOnLine(v, s.a, s.b)) <= HOST_OFFSET);
+      const host = new Set([s]);
+      for (const direction of [-1, 1]) for (let j = 1; j < sides.length; j++) {
+        const t = sides[(sides.indexOf(s) + direction * j + sides.length) % sides.length];
+        if (!sameWall(t)) break;
+        host.add(t);
+      }
+      if (sides.some((t) => !host.has(t) && segmentDistance(p, anchor, t.a, t.b) < CLEARANCE - EPS)) return null;
       return anchor;
     }).filter(Boolean);
   }
@@ -484,9 +493,9 @@
       const d = dist(net.nodes[a], net.nodes[b]);
       if (!gap || d < gap.d) gap = { a: net.nodes[a], b: net.nodes[b], d };
     }
-    if (!gap) return `門 ${label(door)} 接上的通道和所有直通樓梯都沒有連起來（需保留 0.5 m 路線淨距，中心線走廊需有至少 1 m 的已知淨寬）`;
+    if (!gap) return `門 ${label(door)} 接上的通道和所有直通樓梯都沒有連起來（需保留 ${CLEARANCE} m 路線淨距，中心線走廊需有至少 ${r2(2 * CLEARANCE)} m 的已知淨寬）`;
     const at = (p) => { const c = corridorAt(corridors, p); return (c ? c.name + " " : "") + pt(p); };
-    return `門 ${label(door)} 走不到樓梯：可行範圍斷口在 ${at(gap.a)} 和 ${at(gap.b)} 之間，相距 ${r2(gap.d)} m；請確認 0.5 m 路線淨距、門口接入點與走廊淨寬`;
+    return `門 ${label(door)} 走不到樓梯：可行範圍斷口在 ${at(gap.a)} 和 ${at(gap.b)} 之間，相距 ${r2(gap.d)} m；請確認 ${CLEARANCE} m 路線淨距、門口接入點與走廊淨寬`;
   }
 
   // 房間外框和通行空間外框重疊（共線、相距 5 cm 內）且長 0.3 m 以上的邊段 → 開口，位置取重疊段中點
@@ -568,8 +577,8 @@
       return { missing: doors.map((d, di) => gapReport(net, corridors, d, net.doorNode[di], net.stairNode)).join("；") };
     doors.forEach((d, di) => { if (exitCost[di] === Infinity) notes.push(gapReport(net, corridors, d, net.doorNode[di], net.stairNode) + "，這扇門不列入計算"); });
     const fp = farthestPoint(room.boundary, obstacles, gates, exitCost);
-    if (!fp) return { missing: "房間內沒有保留 0.5 m 路線淨距的候選位置；請檢查房間邊界、通道寬度與障礙物" };
-    if (fp.v === Infinity) return { missing: `房內 ${pt(fp.p)} 附近在保留 0.5 m 路線淨距後走不到任何一扇門；請檢查狹窄通道或障礙物` };
+    if (!fp) return { missing: `房間內沒有保留 ${CLEARANCE} m 路線淨距的候選位置；請檢查房間邊界、通道寬度與障礙物` };
+    if (fp.v === Infinity) return { missing: `房內 ${pt(fp.p)} 附近在保留 ${CLEARANCE} m 路線淨距後走不到任何一扇門；請檢查狹窄通道或障礙物` };
 
     const far = fp.p, pi = 0;
     const insides = [doors.map((d, di) => {
@@ -593,8 +602,8 @@
     if (through.length) notes.push(`路線穿過 ${through.map(label).join("、")}（居室），請確認這條路線實際可通行`);
     if (best.s.is_direct_stair !== true) notes.push(`算到的 ${label(best.s)} 還沒確認是直通樓梯`);
     if (String(best.s.endpoint_source || "").startsWith("auto:")) notes.push(`${label(best.s)} 的第一階位置是外掛從梯段路徑自動推的`);
-    notes.push("路線以 0.5 m 牆面／固定障礙物淨距計算；門口與樓梯終點僅保留垂直接入短段。這是專案幾何假設，不是法定數字");
-    if (corridors.length) notes.push("只有中心線的走廊依已提供的有效淨寬檢查，並非從實體牆面量得路線淨距；未知或小於 1 m 的走廊不作路線");
+    notes.push(`路線以 ${CLEARANCE} m 牆面／固定障礙物淨距計算；門口與樓梯終點僅保留垂直接入短段。這是專案幾何假設，不是法定數字`);
+    if (corridors.length) notes.push(`只有中心線的走廊依已提供的有效淨寬檢查，並非從實體牆面量得路線淨距；未知或小於 ${r2(2 * CLEARANCE)} m 的走廊不作路線`);
     return {
       geometry_version: GEOMETRY_VERSION, route_clearance_m: CLEARANCE,
       door_id: best.door.element_id,
